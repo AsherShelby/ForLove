@@ -1,573 +1,688 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Three.js Particles x Hand Gestures V2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand Gesture Particle Magic</title>
     <style>
-        :root {
-            --primary: #00f3ff;
-            --secondary: #ff0055;
-            --bg: #050505;
-        }
-        body, html {
+        * {
             margin: 0;
             padding: 0;
-            overflow: hidden;
-            background-color: var(--bg);
-            font-family: 'Courier New', Courier, monospace;
-            color: white;
-        }
-        #canvas-container {
-            position: absolute;
-            top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1;
-        }
-        
-        /* UI Overlay */
-        #ui-layer {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%; z-index: 10;
-            pointer-events: none;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 20px;
             box-sizing: border-box;
         }
-
-        /* Debug View (Bottom Left) */
-        .debug-container {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            width: 240px;
-            height: 180px;
-            border: 2px solid var(--primary);
-            background: rgba(0,0,0,0.8);
-            border-radius: 8px;
+        body {
             overflow: hidden;
-            pointer-events: auto;
+            font-family: 'Arial', sans-serif;
+            background: #000;
         }
-        #video-preview, #output_canvas {
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #video {
             position: absolute;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            transform: scaleX(-1); /* Mirror effect */
+            top: 0;
+            left: 0;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
         }
-        #output_canvas { z-index: 2; }
-        
-        .status-badge {
-            position: absolute;
-            top: 10px; left: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 5px 10px;
-            border-radius: 4px;
-            color: var(--primary);
-            font-size: 12px;
-            z-index: 5;
-            border: 1px solid var(--primary);
-        }
-
-        /* Gesture Guide (Right) */
-        .gesture-guide {
-            position: absolute;
-            top: 50%; right: 20px;
-            transform: translateY(-50%);
-            background: rgba(0,0,0,0.6);
-            padding: 20px;
-            border-radius: 12px;
-            border-right: 4px solid var(--secondary);
-            text-align: right;
-            backdrop-filter: blur(4px);
-        }
-        .guide-item { margin-bottom: 12px; font-size: 14px; color: #ccc; }
-        .guide-item span { color: var(--primary); font-weight: bold; margin-left: 8px; font-size: 16px;}
-
-        /* Loader */
-        #loader {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; z-index: 999;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a0a2e 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
             transition: opacity 0.5s;
         }
-        .loading-text { margin-top: 15px; color: var(--primary); letter-spacing: 2px; }
-        
-        /* Current Gesture Display */
-        #current-gesture {
-            position: absolute;
-            top: 20px;
-            width: 100%;
+        #loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .loader {
+            width: 80px;
+            height: 80px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #ff00ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .loading-text {
+            margin-top: 20px;
+            color: #fff;
+            font-size: 18px;
             text-align: center;
+        }
+        #controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .control-btn {
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: #ff00ff;
+            box-shadow: 0 0 20px rgba(255, 0, 255, 0.5);
+        }
+        #gesture-info {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 30px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 12px;
+            color: #fff;
+            font-size: 16px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            z-index: 100;
+        }
+        .gesture-name {
             font-size: 24px;
             font-weight: bold;
-            color: #fff;
-            text-shadow: 0 0 10px var(--secondary);
-            opacity: 0.9;
+            background: linear-gradient(45deg, #ff00ff, #00ffff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 5px;
         }
     </style>
 </head>
 <body>
-
-    <div id="loader">
-        <div style="font-size: 40px;">✋🔮</div>
-        <div class="loading-text">INITIALIZING AI & GPU...</div>
-        <div style="font-size:12px; color:gray; margin-top:10px">(Please allow Camera Access)</div>
+    <div id="loading">
+        <div class="loader"></div>
+        <div class="loading-text">正在初始化粒子系统和手势识别...</div>
     </div>
-
-    <div id="ui-layer">
-        <div id="current-gesture">WAITING FOR HAND...</div>
-
-        <div class="gesture-guide">
-            <div class="guide-item">✊ Fist <span>❤️ Heart</span></div>
-            <div class="guide-item">🖐 Open <span>💥 Explode</span></div>
-            <div class="guide-item">✌️ Victory <span>⭐ Star</span></div>
-            <div class="guide-item">🤘 Rock <span>🎵 Note</span></div>
-            <div class="guide-item">🤚 Palm+ThumbIn <span>LOVE</span></div>
-        </div>
-
-        <div class="debug-container">
-            <div class="status-badge" id="status-text">Loading...</div>
-            <video id="video-preview" playsinline autoplay></video>
-            <canvas id="output_canvas"></canvas>
-        </div>
-    </div>
-
     <div id="canvas-container"></div>
+    <video id="video" autoplay playsinline></video>
+    <div id="controls">
+        <button class="control-btn" id="toggleCamera">关闭摄像头</button>
+    </div>
+    <div id="gesture-info">
+        <div class="gesture-name">等待手势...</div>
+        <div>👊 握拳=爱心 | ✋ 张开=散开 | ✌️ V=星星 | 🤘 摇滚=音符</div>
+    </div>
 
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/",
-                "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm"
-            }
+    {
+        "imports": {
+            "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/r165/three.module.min.js"
         }
+    }
     </script>
 
     <script type="module">
         import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { FilesetResolver, HandLandmarker, DrawingUtils } from '@mediapipe/tasks-vision';
 
-        // --- Configuration ---
-        const CONFIG = {
-            particleCount: 10000,
-            particleSize: 3.5,
-            explosionForce: 2.5,
-            colors: {
-                default: 0x00f3ff,
-                heart: 0xff0055,
-                star: 0xffff00,
-                note: 0x00ffaa,
-                love: 0xff00ff
-            }
-        };
+        // ==================== 全局变量 ====================
+        let scene, camera, renderer, particles;
+        let particleCount = 10000;
+        let positions, velocities, targets, colors, sizes;
+        let currentShape = 'float';
+        let video, handDetector;
+        let cameraEnabled = true;
+        let animationTime = 0;
+        let breathePhase = 0;
+        let explosionTime = 0;
 
-        const state = {
-            gesture: 'None',
-            targetShape: 'sphere',
-            isExploding: false,
-            time: 0
-        };
+        // ==================== 初始化 Three.js ====================
+        function initThree() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 30;
 
-        // --- 1. Three.js Scene Setup ---
-        const container = document.getElementById('canvas-container');
-        const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x050505, 0.002);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 60;
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        container.appendChild(renderer.domElement);
-
-        const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.autoRotate = true;
-        controls.autoRotateSpeed = 0.5;
-
-        // --- 2. Particle System (BufferGeometry + Shader) ---
-        const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(CONFIG.particleCount * 3);
-        const targets = new Float32Array(CONFIG.particleCount * 3);
-        const velocities = new Float32Array(CONFIG.particleCount * 3);
-        const colors = new Float32Array(CONFIG.particleCount * 3);
-        const sizes = new Float32Array(CONFIG.particleCount);
-
-        // Init Particles
-        for(let i=0; i<CONFIG.particleCount; i++) {
-            const i3 = i*3;
-            // Sphere init
-            const r = 30 * Math.cbrt(Math.random());
-            const theta = Math.random() * Math.PI * 2;
-            const phi = Math.acos(2 * Math.random() - 1);
-            
-            positions[i3] = r * Math.sin(phi) * Math.cos(theta);
-            positions[i3+1] = r * Math.sin(phi) * Math.sin(theta);
-            positions[i3+2] = r * Math.cos(phi);
-            
-            targets[i3] = positions[i3];
-            targets[i3+1] = positions[i3+1];
-            targets[i3+2] = positions[i3+2];
-
-            const c = new THREE.Color(CONFIG.colors.default);
-            colors[i3] = c.r; colors[i3+1] = c.g; colors[i3+2] = c.b;
-            sizes[i] = Math.random();
+            // 创建星空背景
+            createStarField();
         }
 
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geometry.setAttribute('target', new THREE.BufferAttribute(targets, 3));
-        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-        geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+        // ==================== 创建星空背景 ====================
+        function createStarField() {
+            const starGeometry = new THREE.BufferGeometry();
+            const starCount = 2000;
+            const starPositions = new Float32Array(starCount * 3);
+            
+            for (let i = 0; i < starCount * 3; i += 3) {
+                starPositions[i] = (Math.random() - 0.5) * 200;
+                starPositions[i + 1] = (Math.random() - 0.5) * 200;
+                starPositions[i + 2] = (Math.random() - 0.5) * 100 - 50;
+            }
+            
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+            
+            const starMaterial = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 0.5,
+                transparent: true,
+                opacity: 0.6
+            });
+            
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+        }
 
-        const material = new THREE.ShaderMaterial({
-            uniforms: {
-                uTime: { value: 0 },
-                uPixelRatio: { value: renderer.getPixelRatio() },
-                uSize: { value: CONFIG.particleSize },
-            },
-            vertexShader: `
-                uniform float uTime;
-                uniform float uPixelRatio;
-                uniform float uSize;
+        // ==================== 创建粒子系统 ====================
+        function createParticles() {
+            positions = new Float32Array(particleCount * 3);
+            velocities = new Float32Array(particleCount * 3);
+            targets = new Float32Array(particleCount * 3);
+            colors = new Float32Array(particleCount * 3);
+            sizes = new Float32Array(particleCount);
+
+            // 初始化随机位置
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 50;
+                positions[i + 1] = (Math.random() - 0.5) * 50;
+                positions[i + 2] = (Math.random() - 0.5) * 50;
+                
+                velocities[i] = 0;
+                velocities[i + 1] = 0;
+                velocities[i + 2] = 0;
+                
+                targets[i] = positions[i];
+                targets[i + 1] = positions[i + 1];
+                targets[i + 2] = positions[i + 2];
+                
+                colors[i] = Math.random();
+                colors[i + 1] = Math.random();
+                colors[i + 2] = Math.random();
+                
+                sizes[i / 3] = Math.random() * 2 + 1;
+            }
+
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            // 自定义着色器
+            const vertexShader = `
                 attribute float size;
                 attribute vec3 color;
-                attribute vec3 target;
                 varying vec3 vColor;
+                varying float vAlpha;
+                
                 void main() {
                     vColor = color;
                     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                    gl_PointSize = (uSize * size * uPixelRatio * 40.0) / -mvPosition.z;
-                    // Pulse effect
-                    gl_PointSize *= (1.0 + sin(uTime * 3.0 + position.x) * 0.2);
+                    gl_PointSize = size * (300.0 / -mvPosition.z);
                     gl_Position = projectionMatrix * mvPosition;
+                    vAlpha = 1.0 - (length(position) / 50.0);
                 }
-            `,
-            fragmentShader: `
+            `;
+
+            const fragmentShader = `
                 varying vec3 vColor;
+                varying float vAlpha;
+                
                 void main() {
-                    vec2 uv = gl_PointCoord - 0.5;
-                    float r = length(uv);
-                    if (r > 0.5) discard;
-                    float glow = 1.0 - (r * 2.0);
-                    glow = pow(glow, 2.5);
-                    gl_FragColor = vec4(vColor, glow);
-                }
-            `,
-            blending: THREE.AdditiveBlending,
-            depthWrite: false,
-            transparent: true
-        });
-
-        const particles = new THREE.Points(geometry, material);
-        scene.add(particles);
-
-        // --- 3. Shape Generators ---
-        function getShapePoint(type, i) {
-            const ratio = i / CONFIG.particleCount;
-            let x=0, y=0, z=0;
-            
-            if (type === 'heart') {
-                const t = ratio * Math.PI * 2;
-                x = 16 * Math.pow(Math.sin(t), 3);
-                y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
-                x *= 1.2; y *= 1.2;
-                z = (Math.random()-0.5) * 10;
-            } 
-            else if (type === 'star') {
-                const t = ratio * Math.PI * 2 * 5; 
-                const r = 20 + 10 * Math.sin(5 * t); 
-                x = r * Math.cos(t);
-                y = r * Math.sin(t);
-                z = (Math.random()-0.5) * 5;
-            }
-            else if (type === 'note') {
-                // Simplified Note
-                if (ratio < 0.3) { // Head
-                     const r = 6; const theta = Math.random()*Math.PI*2;
-                     x = -8 + r*Math.cos(theta); y = -10 + r*Math.sin(theta);
-                } else if (ratio < 0.7) { // Stem
-                    x = 0 + (Math.random()-0.5)*3; y = -10 + (ratio-0.3)/0.4 * 35;
-                } else { // Flag
-                    x = 0 + (ratio-0.7)/0.3 * 12; y = 25 - (ratio-0.7)/0.3 * 10;
-                }
-                z = (Math.random()-0.5) * 5;
-            }
-            else if (type === 'love') {
-                // Just an 'L' shape for simplicity to ensure it works first
-                if (ratio < 0.5) { // Vertical
-                     x = -10 + (Math.random()-0.5)*4; y = -15 + ratio/0.5 * 30;
-                } else { // Horizontal
-                     x = -10 + (ratio-0.5)/0.5 * 20; y = -15 + (Math.random()-0.5)*4;
-                }
-                z = (Math.random()-0.5) * 5;
-            }
-            else { // Sphere
-                const phi = Math.acos(-1 + (2 * i) / CONFIG.particleCount);
-                const theta = Math.sqrt(CONFIG.particleCount * Math.PI) * phi;
-                const r = 30;
-                x = r * Math.cos(theta) * Math.sin(phi);
-                y = r * Math.sin(theta) * Math.sin(phi);
-                z = r * Math.cos(phi);
-            }
-            return {x,y,z};
-        }
-
-        function transformShape(shape, colorHex) {
-            state.targetShape = shape;
-            const targetAttr = geometry.attributes.target.array;
-            const colorAttr = geometry.attributes.color.array;
-            const targetColor = new THREE.Color(colorHex);
-
-            for(let i=0; i<CONFIG.particleCount; i++) {
-                const p = getShapePoint(shape, i);
-                targetAttr[i*3] = p.x;
-                targetAttr[i*3+1] = p.y;
-                targetAttr[i*3+2] = p.z;
-                
-                // Immediate color change for responsiveness
-                colorAttr[i*3] = targetColor.r;
-                colorAttr[i*3+1] = targetColor.g;
-                colorAttr[i*3+2] = targetColor.b;
-            }
-            geometry.attributes.target.needsUpdate = true;
-            geometry.attributes.color.needsUpdate = true;
-        }
-
-        // --- 4. Animation Loop ---
-        function animateParticles() {
-            const pos = geometry.attributes.position.array;
-            const trg = geometry.attributes.target.array;
-            
-            for(let i=0; i<CONFIG.particleCount; i++) {
-                const i3 = i*3;
-                let px = pos[i3], py = pos[i3+1], pz = pos[i3+2];
-                let vx = velocities[i3], vy = velocities[i3+1], vz = velocities[i3+2];
-
-                if(state.isExploding) {
-                    // Explosion logic
-                    const force = CONFIG.explosionForce / (Math.sqrt(px*px+py*py+pz*pz) + 1.0);
-                    vx += px * force * 0.1;
-                    vy += py * force * 0.1;
-                    vz += pz * force * 0.1;
-                } else {
-                    // Attraction logic
-                    vx += (trg[i3] - px) * 0.05;
-                    vy += (trg[i3+1] - py) * 0.05;
-                    vz += (trg[i3+2] - pz) * 0.05;
-                }
-
-                // Drag/Friction
-                vx *= 0.9; vy *= 0.9; vz *= 0.9;
-
-                pos[i3] += vx; pos[i3+1] += vy; pos[i3+2] += vz;
-                velocities[i3] = vx; velocities[i3+1] = vy; velocities[i3+2] = vz;
-            }
-            geometry.attributes.position.needsUpdate = true;
-        }
-
-        const clock = new THREE.Clock();
-        function animate() {
-            requestAnimationFrame(animate);
-            material.uniforms.uTime.value = clock.getElapsedTime();
-            controls.update();
-            animateParticles();
-            renderer.render(scene, camera);
-        }
-        animate();
-
-        // --- 5. AI & Computer Vision ---
-        const video = document.getElementById('video-preview');
-        const canvas = document.getElementById('output_canvas');
-        const canvasCtx = canvas.getContext('2d');
-        const statusText = document.getElementById('status-text');
-        const gestureText = document.getElementById('current-gesture');
-        let handLandmarker;
-        let runningMode = "VIDEO";
-
-        async function initAI() {
-            try {
-                const vision = await FilesetResolver.forVisionTasks(
-                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
-                );
-                handLandmarker = await HandLandmarker.createFromOptions(vision, {
-                    baseOptions: {
-                        modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
-                        delegate: "GPU"
-                    },
-                    runningMode: runningMode,
-                    numHands: 1
-                });
-                
-                statusText.innerText = "AI Ready. Starting Cam...";
-                startWebcam();
-            } catch (error) {
-                console.error(error);
-                statusText.innerText = "Error Loading AI";
-                alert("Failed to load MediaPipe. Check console.");
-            }
-        }
-
-        function startWebcam() {
-            if (!navigator.mediaDevices?.getUserMedia) {
-                alert("Camera not supported or blocked.");
-                return;
-            }
-            navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
-                video.srcObject = stream;
-                video.addEventListener("loadeddata", () => {
-                    // Camera is ready
-                    document.getElementById('loader').style.display = 'none';
-                    statusText.innerText = "Tracking Active";
-                    // Initialize canvas size
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    // Start detection loop
-                    predictWebcam();
-                });
-            }).catch(err => {
-                console.error(err);
-                statusText.innerText = "Cam Blocked!";
-                alert("Please allow camera access and use HTTPS/Localhost.");
-            });
-        }
-
-        let lastVideoTime = -1;
-        const drawingUtils = new DrawingUtils(canvasCtx);
-
-        async function predictWebcam() {
-            // Resize canvas if needed
-            if(canvas.width !== video.videoWidth) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-            }
-
-            let startTimeMs = performance.now();
-            if (lastVideoTime !== video.currentTime) {
-                lastVideoTime = video.currentTime;
-                const results = handLandmarker.detectForVideo(video, startTimeMs);
-
-                canvasCtx.save();
-                canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
-
-                if (results.landmarks && results.landmarks.length > 0) {
-                    const landmarks = results.landmarks[0];
+                    vec2 center = gl_PointCoord - vec2(0.5);
+                    float dist = length(center);
                     
-                    // --- Draw Skeleton (Debug) ---
-                    drawingUtils.drawConnectors(landmarks, HandLandmarker.HAND_CONNECTIONS, { color: "#00f3ff", lineWidth: 3 });
-                    drawingUtils.drawLandmarks(landmarks, { color: "#ff0055", lineWidth: 2 });
-
-                    // --- Gesture Recognition Logic ---
-                    const gesture = recognizeGesture(landmarks);
-                    if(gesture !== state.gesture) {
-                        state.gesture = gesture;
-                        gestureText.innerText = "GESTURE: " + gesture.toUpperCase();
-                        handleGestureAction(gesture);
-                    }
-                } else {
-                    // No hand detected
-                    gestureText.innerText = "NO HAND DETECTED";
+                    if (dist > 0.5) discard;
+                    
+                    float alpha = 1.0 - (dist * 2.0);
+                    alpha = pow(alpha, 2.0);
+                    
+                    vec3 glow = vColor * 1.5;
+                    gl_FragColor = vec4(glow, alpha * vAlpha);
                 }
-                canvasCtx.restore();
-            }
-            window.requestAnimationFrame(predictWebcam);
+            `;
+
+            const material = new THREE.ShaderMaterial({
+                vertexShader,
+                fragmentShader,
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+
+            particles = new THREE.Points(geometry, material);
+            scene.add(particles);
         }
 
-        function recognizeGesture(lm) {
-            // lm = array of 21 points {x,y,z}
-            
-            // Helper: distance between two points (ignoring Z for simplicity in 2D video plane)
-            const dist = (p1, p2) => Math.hypot(p1.x - p2.x, p1.y - p2.y);
-            
-            const wrist = lm[0];
-            const thumbTip = lm[4];
-            const indexTip = lm[8];
-            const midTip = lm[12];
-            const ringTip = lm[16];
-            const pinkyTip = lm[20];
-            
-            const indexPip = lm[6];
-            const midPip = lm[10];
-            const ringPip = lm[14];
-            const pinkyPip = lm[18];
-
-            // 1. Check if fingers are extended (Tip is further from wrist than PIP)
-            // Note: This logic depends on hand size, but generally works. 
-            // Better: Check if Tip to Wrist distance is significantly larger than PIP to Wrist.
-            
-            const isFingerOpen = (tip, pip) => dist(wrist, tip) > dist(wrist, pip) * 1.2;
-
-            const indexOpen = isFingerOpen(indexTip, indexPip);
-            const midOpen = isFingerOpen(midTip, midPip);
-            const ringOpen = isFingerOpen(ringTip, ringPip);
-            const pinkyOpen = isFingerOpen(pinkyTip, pinkyPip);
-            
-            // Thumb is tricky. Let's check if it's far from index base (5)
-            const thumbOpen = dist(thumbTip, lm[5]) > 0.1; // Threshold based on normalized coords
-
-            const openCount = [indexOpen, midOpen, ringOpen, pinkyOpen].filter(Boolean).length;
-
-            // --- Logic Tree ---
-            
-            // FIST: All fingers closed (or close to it)
-            // Improved Fist: Check average distance of tips to wrist.
-            const tipsToWrist = (dist(wrist, indexTip) + dist(wrist, midTip) + dist(wrist, ringTip) + dist(wrist, pinkyTip)) / 4;
-            // 0.3 is a heuristic threshold for normalized coordinates
-            if (openCount === 0 || tipsToWrist < 0.25) return 'fist';
-
-            // OPEN: All open
-            if (openCount >= 4) {
-                if(!thumbOpen) return 'love'; // Palm open + thumb in = roughly Love/Hi
-                return 'open';
+        // ==================== 形状生成函数 ====================
+        function createHeartPoints(count) {
+            const points = [];
+            for (let i = 0; i < count; i++) {
+                const t = (i / count) * Math.PI * 2;
+                const u = Math.random() * Math.PI * 2;
+                
+                const x = 16 * Math.pow(Math.sin(t), 3);
+                const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+                const z = Math.sin(u) * 3;
+                
+                points.push(x * 0.8, y * 0.8 - 5, z);
             }
-
-            // STAR: V sign (Index + Mid)
-            if (indexOpen && midOpen && !ringOpen && !pinkyOpen) return 'star';
-
-            // ROCK: Index + Pinky
-            if (indexOpen && pinkyOpen && !midOpen && !ringOpen) return 'rock';
-
-            return 'unknown';
+            return points;
         }
 
-        function handleGestureAction(gesture) {
-            state.isExploding = false; // Reset unless open
+        function createStarPoints(count) {
+            const points = [];
+            const spikes = 5;
+            const outerRadius = 15;
+            const innerRadius = 6;
             
-            switch(gesture) {
-                case 'fist':
-                    transformShape('heart', CONFIG.colors.heart);
-                    break;
-                case 'open':
-                    state.isExploding = true;
-                    // transformShape('sphere', CONFIG.colors.default);
+            for (let i = 0; i < count; i++) {
+                const angle = (i / count) * Math.PI * 2 * spikes;
+                const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                const depth = Math.random() * 4 - 2;
+                
+                const x = Math.cos(angle) * radius;
+                const y = Math.sin(angle) * radius;
+                const z = depth;
+                
+                points.push(x, y, z);
+            }
+            return points;
+        }
+
+        function createFlowerPoints(count) {
+            const points = [];
+            const petals = 5;
+            
+            for (let i = 0; i < count; i++) {
+                const t = (i / count) * Math.PI * 2;
+                const r = 12 * (1 + 0.5 * Math.sin(petals * t));
+                const depth = Math.cos(petals * t) * 2;
+                
+                const x = r * Math.cos(t);
+                const y = r * Math.sin(t);
+                const z = depth;
+                
+                points.push(x, y, z);
+            }
+            return points;
+        }
+
+        function createNotePoints(count) {
+            const points = [];
+            
+            // 音符的圆形头部
+            for (let i = 0; i < count * 0.4; i++) {
+                const angle = (i / (count * 0.4)) * Math.PI * 2;
+                const x = Math.cos(angle) * 4 - 5;
+                const y = Math.sin(angle) * 4 - 5;
+                const z = Math.random() * 2 - 1;
+                points.push(x, y, z);
+            }
+            
+            // 音符的竖线
+            for (let i = 0; i < count * 0.4; i++) {
+                const x = -5;
+                const y = -5 + (i / (count * 0.4)) * 15;
+                const z = Math.random() * 2 - 1;
+                points.push(x, y, z);
+            }
+            
+            // 音符的旗帜
+            for (let i = 0; i < count * 0.2; i++) {
+                const t = (i / (count * 0.2)) * Math.PI;
+                const x = -5 + Math.sin(t) * 6;
+                const y = 10 - Math.cos(t) * 3;
+                const z = Math.random() * 2 - 1;
+                points.push(x, y, z);
+            }
+            
+            return points;
+        }
+
+        function createLoveTextPoints(count) {
+            const points = [];
+            const letters = [
+                // L
+                [[0, 0], [0, 10], [0, 0], [8, 0]],
+                // O
+                [[12, 5], [12, 5]],
+                // V
+                [[20, 10], [24, 0], [24, 0], [28, 10]],
+                // E
+                [[32, 0], [32, 10], [32, 5], [38, 5], [32, 0], [38, 0], [32, 10], [38, 10]]
+            ];
+            
+            let idx = 0;
+            for (const letter of letters) {
+                for (let i = 0; i < letter.length - 1; i += 2) {
+                    const [x1, y1] = letter[i];
+                    const [x2, y2] = letter[i + 1];
+                    const steps = Math.floor(count / (letters.length * letter.length / 2));
+                    
+                    for (let j = 0; j < steps && idx < count; j++, idx++) {
+                        const t = j / steps;
+                        const x = x1 + (x2 - x1) * t - 19;
+                        const y = y1 + (y2 - y1) * t - 5;
+                        const z = Math.random() * 2 - 1;
+                        points.push(x, y, z);
+                    }
+                }
+            }
+            
+            while (points.length < count * 3) {
+                points.push(0, 0, 0);
+            }
+            
+            return points;
+        }
+
+        // ==================== 设置目标形状 ====================
+        function setTargetShape(shape) {
+            currentShape = shape;
+            let newTargets;
+            
+            switch (shape) {
+                case 'heart':
+                    newTargets = createHeartPoints(particleCount);
+                    updateColors([1, 0.2, 0.5]);
                     break;
                 case 'star':
-                    transformShape('star', CONFIG.colors.star);
+                    newTargets = createStarPoints(particleCount);
+                    updateColors([1, 1, 0.3]);
                     break;
-                case 'rock':
-                    transformShape('note', CONFIG.colors.note);
+                case 'flower':
+                    newTargets = createFlowerPoints(particleCount);
+                    updateColors([1, 0.5, 0.8]);
+                    break;
+                case 'note':
+                    newTargets = createNotePoints(particleCount);
+                    updateColors([0.5, 0.8, 1]);
                     break;
                 case 'love':
-                    transformShape('love', CONFIG.colors.love);
+                    newTargets = createLoveTextPoints(particleCount);
+                    updateColors([1, 0, 1]);
                     break;
+                case 'explode':
+                    explodeParticles();
+                    updateColors([0.8, 0.4, 1]);
+                    explosionTime = Date.now();
+                    return;
                 default:
-                    // transformShape('sphere', CONFIG.colors.default);
-                    break;
+                    return;
+            }
+            
+            for (let i = 0; i < particleCount * 3; i++) {
+                targets[i] = newTargets[i];
             }
         }
 
-        // --- Init ---
+        function explodeParticles() {
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                const angle = Math.random() * Math.PI * 2;
+                const elevation = (Math.random() - 0.5) * Math.PI;
+                const speed = Math.random() * 20 + 10;
+                
+                velocities[i] = Math.cos(angle) * Math.cos(elevation) * speed;
+                velocities[i + 1] = Math.sin(elevation) * speed;
+                velocities[i + 2] = Math.sin(angle) * Math.cos(elevation) * speed;
+                
+                targets[i] = positions[i] + velocities[i] * 5;
+                targets[i + 1] = positions[i + 1] + velocities[i + 1] * 5;
+                targets[i + 2] = positions[i + 2] + velocities[i + 2] * 5;
+            }
+        }
+
+        function updateColors(baseColor) {
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                const variation = Math.random() * 0.3;
+                colors[i] = baseColor[0] + variation;
+                colors[i + 1] = baseColor[1] + variation;
+                colors[i + 2] = baseColor[2] + variation;
+            }
+            particles.geometry.attributes.color.needsUpdate = true;
+        }
+
+        // ==================== 更新粒子 ====================
+        function updateParticles() {
+            breathePhase += 0.02;
+            const breatheScale = 1 + Math.sin(breathePhase) * 0.1;
+            const rotationSpeed = 0.005;
+            
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                const dx = targets[i] - positions[i];
+                const dy = targets[i + 1] - positions[i + 1];
+                const dz = targets[i + 2] - positions[i + 2];
+                
+                const force = currentShape === 'explode' ? 0.02 : 0.08;
+                
+                velocities[i] += dx * force;
+                velocities[i + 1] += dy * force;
+                velocities[i + 2] += dz * force;
+                
+                velocities[i] *= 0.92;
+                velocities[i + 1] *= 0.92;
+                velocities[i + 2] *= 0.92;
+                
+                positions[i] += velocities[i];
+                positions[i + 1] += velocities[i + 1];
+                positions[i + 2] += velocities[i + 2];
+                
+                // 呼吸动画
+                if (currentShape !== 'explode' && currentShape !== 'float') {
+                    const centerX = positions[i];
+                    const centerY = positions[i + 1];
+                    const centerZ = positions[i + 2];
+                    
+                    positions[i] = centerX * breatheScale;
+                    positions[i + 1] = centerY * breatheScale;
+                    positions[i + 2] = centerZ * breatheScale;
+                }
+            }
+            
+            particles.geometry.attributes.position.needsUpdate = true;
+            
+            // 整体旋转
+            if (currentShape !== 'explode' && currentShape !== 'float') {
+                particles.rotation.y += rotationSpeed;
+            }
+        }
+
+        // ==================== MediaPipe 手势识别 ====================
+        async function initHandDetection() {
+            try {
+                const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs');
+                
+                const handLandmarker = await vision.HandLandmarker.createFromOptions(
+                    vision,
+                    {
+                        baseOptions: {
+                            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+                            delegate: 'GPU'
+                        },
+                        runningMode: 'VIDEO',
+                        numHands: 1
+                    }
+                );
+                
+                video = document.getElementById('video');
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'user' } 
+                });
+                video.srcObject = stream;
+                
+                handDetector = handLandmarker;
+                
+                detectHands();
+            } catch (error) {
+                console.error('Hand detection init error:', error);
+                document.querySelector('.loading-text').textContent = '手势识别初始化失败，仅显示粒子效果';
+            }
+        }
+
+        function detectHands() {
+            if (!cameraEnabled || !handDetector) return;
+            
+            const detectionLoop = () => {
+                if (!cameraEnabled) return;
+                
+                if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                    const results = handDetector.detectForVideo(video, Date.now());
+                    
+                    if (results.landmarks && results.landmarks.length > 0) {
+                        const gesture = recognizeGesture(results.landmarks[0]);
+                        handleGesture(gesture);
+                    }
+                }
+                
+                requestAnimationFrame(detectionLoop);
+            };
+            
+            detectionLoop();
+        }
+
+        function recognizeGesture(landmarks) {
+            const fingers = [
+                isFingerExtended(landmarks, 4),  // 拇指
+                isFingerExtended(landmarks, 8),  // 食指
+                isFingerExtended(landmarks, 12), // 中指
+                isFingerExtended(landmarks, 16), // 无名指
+                isFingerExtended(landmarks, 20)  // 小指
+            ];
+            
+            const extendedCount = fingers.filter(f => f).length;
+            
+            // 完全张开
+            if (extendedCount === 5) {
+                return 'explode';
+            }
+            
+            // 握拳
+            if (extendedCount === 0 || extendedCount === 1) {
+                return 'heart';
+            }
+            
+            // V手势 (食指+中指)
+            if (fingers[1] && fingers[2] && !fingers[3] && !fingers[4]) {
+                return 'star';
+            }
+            
+            // 摇滚手势 (食指+小指+拇指)
+            if (fingers[0] && fingers[1] && !fingers[2] && !fingers[3] && fingers[4]) {
+                return 'note';
+            }
+            
+            // LOVE手势 (四指伸出，拇指内扣)
+            if (!fingers[0] && fingers[1] && fingers[2] && fingers[3] && fingers[4]) {
+                return 'love';
+            }
+            
+            // 花朵 (三指)
+            if (extendedCount === 3) {
+                return 'flower';
+            }
+            
+            return null;
+        }
+
+        function isFingerExtended(landmarks, tipIdx) {
+            const tip = landmarks[tipIdx];
+            const pip = landmarks[tipIdx - 2];
+            
+            if (tipIdx === 4) {
+                const mcp = landmarks[2];
+                return tip.x < mcp.x - 0.05;
+            }
+            
+            return tip.y < pip.y - 0.03;
+        }
+
+        let lastGesture = null;
+        function handleGesture(gesture) {
+            if (!gesture || gesture === lastGesture) return;
+            
+            lastGesture = gesture;
+            setTargetShape(gesture);
+            
+            const gestureNames = {
+                'heart': '❤️ 爱心',
+                'star': '⭐ 星星',
+                'flower': '🌸 花朵',
+                'note': '♫ 音符',
+                'love': '💕 LOVE',
+                'explode': '💥 爆炸散开'
+            };
+            
+            document.querySelector('.gesture-name').textContent = gestureNames[gesture] || '未知';
+        }
+
+        // ==================== 动画循环 ====================
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            animationTime += 0.016;
+            updateParticles();
+            
+            renderer.render(scene, camera);
+        }
+
+        // ==================== 控制按钮 ====================
+        document.getElementById('toggleCamera').addEventListener('click', () => {
+            cameraEnabled = !cameraEnabled;
+            const btn = document.getElementById('toggleCamera');
+            
+            if (cameraEnabled) {
+                btn.textContent = '关闭摄像头';
+                detectHands();
+            } else {
+                btn.textContent = '开启摄像头';
+                if (video.srcObject) {
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                }
+            }
+        });
+
+        // ==================== 窗口调整 ====================
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // Start
-        initAI();
+        // ==================== 初始化流程 ====================
+        async function init() {
+            initThree();
+            createParticles();
+            
+            await initHandDetection();
+            
+            setTimeout(() => {
+                document.getElementById('loading').classList.add('hidden');
+            }, 1000);
+            
+            animate();
+        }
 
+        init();
     </script>
 </body>
 </html>
