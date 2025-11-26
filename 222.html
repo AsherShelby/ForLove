@@ -1,757 +1,909 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>手势粒子魔法 | Gesture Particle Magic</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Cyber Particles x Hand Gestures</title>
     <style>
-        * {
+        :root {
+            --primary: #00f3ff;
+            --secondary: #bc13fe;
+            --bg: #050505;
+        }
+        body, html {
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
+            overflow: hidden;
+            background-color: var(--bg);
+            font-family: 'Segoe UI', sans-serif;
+            color: white;
         }
-        body {
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100vw;
             height: 100vh;
-            overflow: hidden;
-            background: radial-gradient(ellipse at center, #0d0d1a 0%, #000000 100%);
-            font-family: 'Arial', sans-serif;
+            z-index: 1;
         }
-        #canvas {
-            display: block;
+        /* UI Overlay */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
-        }
-        #video {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 160px;
-            height: 120px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 8px;
-            transform: scaleX(-1);
-            display: none;
             z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
         }
-        #loading {
+        .hud-text {
+            text-shadow: 0 0 10px var(--primary);
+            font-size: 14px;
+            opacity: 0.8;
+            pointer-events: auto;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid var(--primary);
+            padding: 8px 16px;
+            border-radius: 20px;
+            backdrop-filter: blur(5px);
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background: #333;
+            border-radius: 50%;
+            margin-right: 10px;
+            box-shadow: 0 0 5px #333;
+            transition: all 0.3s;
+        }
+        .status-dot.active {
+            background: #0f0;
+            box-shadow: 0 0 8px #0f0;
+        }
+        .status-dot.error {
+            background: #f00;
+            box-shadow: 0 0 8px #f00;
+        }
+        
+        /* Loading Screen */
+        #loader {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.95);
+            background: #000;
+            z-index: 999;
             display: flex;
             flex-direction: column;
-            justify-content: center;
             align-items: center;
-            z-index: 1000;
-            color: white;
+            justify-content: center;
+            transition: opacity 0.8s ease;
         }
-        .loader {
+        .spinner {
             width: 60px;
             height: 60px;
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-top: 4px solid #ff00ff;
+            border: 3px solid rgba(0, 243, 255, 0.3);
+            border-top: 3px solid var(--primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin-bottom: 20px;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        .loader-text {
+            margin-top: 20px;
+            font-size: 16px;
+            letter-spacing: 2px;
+            color: var(--primary);
+            text-transform: uppercase;
         }
-        #loading-text {
-            font-size: 18px;
-            color: #fff;
-            text-align: center;
-            padding: 0 20px;
-        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Controls */
         #controls {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            pointer-events: auto;
             display: flex;
-            gap: 15px;
-            z-index: 100;
+            gap: 10px;
         }
-        .control-btn {
-            padding: 12px 24px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 25px;
-            color: white;
+        button {
+            background: rgba(0,0,0,0.7);
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            padding: 10px 20px;
             cursor: pointer;
-            font-size: 14px;
-            backdrop-filter: blur(10px);
+            text-transform: uppercase;
+            font-weight: bold;
             transition: all 0.3s;
         }
-        .control-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            border-color: rgba(255, 255, 255, 0.5);
+        button:hover {
+            background: var(--primary);
+            color: black;
+            box-shadow: 0 0 15px var(--primary);
         }
-        #gesture-hint {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 15px 30px;
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid rgba(255, 100, 255, 0.5);
-            border-radius: 20px;
-            color: white;
-            font-size: 16px;
-            z-index: 100;
-            backdrop-filter: blur(10px);
+        
+        #video-preview {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            width: 160px;
+            height: 120px;
+            border: 1px solid var(--secondary);
+            opacity: 0.8;
+            transform: scaleX(-1); /* Mirror */
             display: none;
+            pointer-events: auto;
         }
+        
+        .gesture-guide {
+            position: absolute;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            background: rgba(0,0,0,0.5);
+            padding: 15px;
+            border-radius: 10px;
+            text-align: right;
+            border-right: 2px solid var(--secondary);
+        }
+        .guide-item {
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #ddd;
+        }
+        .guide-item span { color: var(--secondary); font-weight: bold; }
+
     </style>
 </head>
 <body>
-    <canvas id="canvas"></canvas>
-    <video id="video" autoplay playsinline></video>
-    
-    <div id="loading">
-        <div class="loader"></div>
-        <div id="loading-text">正在初始化粒子系统...</div>
+
+    <div id="loader">
+        <div class="spinner"></div>
+        <div class="loader-text" id="loader-msg">Initializing Core...</div>
     </div>
-    
-    <div id="controls">
-        <button class="control-btn" id="toggle-camera">关闭摄像头</button>
-        <button class="control-btn" id="toggle-video">显示视频</button>
+
+    <div id="ui-layer">
+        <div class="status-badge">
+            <div class="status-dot" id="cam-status"></div>
+            <span id="status-text">Waiting for Camera...</span>
+        </div>
+
+        <div class="gesture-guide">
+            <div class="guide-item">✊ Fist: <span>Heart</span></div>
+            <div class="guide-item">🖐 Open: <span>Explode</span></div>
+            <div class="guide-item">✌️ Victory: <span>Star</span></div>
+            <div class="guide-item">🤘 Rock: <span>Note ♫</span></div>
+            <div class="guide-item">🤚 Palm+Thumb In: <span>LOVE</span></div>
+        </div>
+
+        <video id="video-preview" playsinline></video>
+
+        <div id="controls">
+            <button id="toggle-cam">Toggle Cam</button>
+        </div>
     </div>
-    
-    <div id="gesture-hint">👋 等待检测手势...</div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    
-    <script>
-        // ========== 全局变量 ==========
-        let scene, camera, renderer, particles, particleSystem;
-        let targetPositions = [];
-        let currentShape = 'scatter';
-        let hands, videoElement, cameraActive = true;
-        const PARTICLE_COUNT = 10000;
-        let shockwaveUniforms;
+    <div id="canvas-container"></div>
 
-        // ========== 初始化 Three.js ==========
-        function initThree() {
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.z = 50;
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/",
+                "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm"
+            }
+        }
+    </script>
 
-            renderer = new THREE.WebGLRenderer({ 
-                canvas: document.getElementById('canvas'),
-                antialias: true,
-                alpha: true
-            });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 
-            // 添加星空背景
-            createStarfield();
-            
-            // 创建粒子系统
-            createParticleSystem();
+        // --- Config ---
+        const PARTICLE_COUNT = 12000;
+        const PARTICLE_SIZE = 4.0;
+        const EXPLOSION_FORCE = 2.0;
+        const ATTRACTION_STRENGTH = 0.08; // How fast particles fly to shape
+        const FRICTION = 0.92;
+        
+        // --- Hand Tracking Config (Introduced from 2.html) ---
+        const CONFIG = {
+            camWidth: 640,
+            camHeight: 480,
+            gestureConfidenceThreshold: 5 // 连续5帧识别到相同手势才切换，增加稳定性
+        };
+        
+        // --- State Management ---
+        const state = {
+            gesture: 'None',
+            targetShape: 'sphere', // sphere, heart, star, note, love
+            isExploding: false,
+            cameraActive: false,
+            time: 0,
+            // 引入手势检测状态
+            handDetected: false,
+            lastGesture: null,
+            gestureConfidence: 0
+        };
 
-            // 创建冲击波效果
-            createShockwave();
+        // --- Three.js Setup ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050505, 0.002);
 
-            window.addEventListener('resize', onWindowResize);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 60;
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.5;
+        controls.enableZoom = false;
+
+        // --- Particle System ---
+        // We use BufferGeometry for performance
+        const geometry = new THREE.BufferGeometry();
+        
+        // Attributes: Position (current), Target (destination), Velocity, Color, Size
+        const posArray = new Float32Array(PARTICLE_COUNT * 3);
+        const targetArray = new Float32Array(PARTICLE_COUNT * 3);
+        const velocityArray = new Float32Array(PARTICLE_COUNT * 3);
+        const colorArray = new Float32Array(PARTICLE_COUNT * 3);
+        const sizeArray = new Float32Array(PARTICLE_COUNT);
+
+        // Initialize Randomly
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+            const i3 = i * 3;
+            // Random sphere distribution
+            const r = 40 * Math.cbrt(Math.random());
+            const theta = Math.random() * 2 * Math.PI;
+            const phi = Math.acos(2 * Math.random() - 1);
+
+            posArray[i3] = r * Math.sin(phi) * Math.cos(theta);
+            posArray[i3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+            posArray[i3 + 2] = r * Math.cos(phi);
+
+            // Set Initial Targets (same as pos)
+            targetArray[i3] = posArray[i3];
+            targetArray[i3 + 1] = posArray[i3 + 1];
+            targetArray[i3 + 2] = posArray[i3 + 2];
+
+            // Velocity 0
+            velocityArray[i3] = 0;
+            velocityArray[i3 + 1] = 0;
+            velocityArray[i3 + 2] = 0;
+
+            // Colors (Initial Blue/Purple)
+            const color = new THREE.Color().setHSL(0.5 + Math.random() * 0.2, 0.8, 0.6);
+            colorArray[i3] = color.r;
+            colorArray[i3 + 1] = color.g;
+            colorArray[i3 + 2] = color.b;
+
+            sizeArray[i] = Math.random();
         }
 
-        // ========== 星空背景 ==========
-        function createStarfield() {
-            const starGeometry = new THREE.BufferGeometry();
-            const starCount = 2000;
-            const starPositions = new Float32Array(starCount * 3);
-            
-            for (let i = 0; i < starCount * 3; i += 3) {
-                starPositions[i] = (Math.random() - 0.5) * 200;
-                starPositions[i + 1] = (Math.random() - 0.5) * 200;
-                starPositions[i + 2] = (Math.random() - 0.5) * 200;
-            }
-            
-            starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-            
-            const starMaterial = new THREE.PointsMaterial({
-                color: 0xffffff,
-                size: 0.5,
-                transparent: true,
-                opacity: 0.6
-            });
-            
-            const stars = new THREE.Points(starGeometry, starMaterial);
-            scene.add(stars);
-        }
+        geometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        geometry.setAttribute('target', new THREE.BufferAttribute(targetArray, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
+        geometry.setAttribute('size', new THREE.BufferAttribute(sizeArray, 1));
 
-        // ========== 粒子系统 ==========
-        function createParticleSystem() {
-            const geometry = new THREE.BufferGeometry();
-            const positions = new Float32Array(PARTICLE_COUNT * 3);
-            const velocities = new Float32Array(PARTICLE_COUNT * 3);
-            const colors = new Float32Array(PARTICLE_COUNT * 3);
-            const sizes = new Float32Array(PARTICLE_COUNT);
-            
-            // 初始化为散开状态
-            for (let i = 0; i < PARTICLE_COUNT * 3; i += 3) {
-                positions[i] = (Math.random() - 0.5) * 100;
-                positions[i + 1] = (Math.random() - 0.5) * 100;
-                positions[i + 2] = (Math.random() - 0.5) * 50;
+        // --- Custom Shader Material ---
+        // Allows for glowing sprites, size attenuation, and color mixing on GPU
+        const material = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0 },
+                uPixelRatio: { value: renderer.getPixelRatio() },
+                uSize: { value: PARTICLE_SIZE },
+                uColorExplosion: { value: new THREE.Color(0xffaa00) }, // Gold/Fire
+                uColorHeart: { value: new THREE.Color(0xff0055) },     // Red
+                uColorStar: { value: new THREE.Color(0xffee00) },      // Yellow
+                uColorNote: { value: new THREE.Color(0x00ffcc) },      // Cyan
+                uColorLove: { value: new THREE.Color(0xff00ff) },      // Magenta
+                uMode: { value: 0.0 } // 0: Normal, 1: Explode mix
+            },
+            vertexShader: `
+                uniform float uTime;
+                uniform float uPixelRatio;
+                uniform float uSize;
                 
-                velocities[i] = (Math.random() - 0.5) * 0.2;
-                velocities[i + 1] = (Math.random() - 0.5) * 0.2;
-                velocities[i + 2] = (Math.random() - 0.5) * 0.2;
-                
-                const color = new THREE.Color();
-                color.setHSL(Math.random(), 1.0, 0.6);
-                colors[i] = color.r;
-                colors[i + 1] = color.g;
-                colors[i + 2] = color.b;
-                
-                sizes[i / 3] = Math.random() * 2 + 1;
-            }
-            
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
-            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-            
-            // 自定义着色器
-            const material = new THREE.ShaderMaterial({
-                uniforms: {
-                    time: { value: 0 },
-                    breathe: { value: 1.0 }
-                },
-                vertexShader: `
-                    attribute float size;
-                    attribute vec3 color;
-                    varying vec3 vColor;
-                    uniform float time;
-                    uniform float breathe;
+                attribute float size;
+                attribute vec3 color;
+                varying vec3 vColor;
+                varying float vAlpha;
+
+                void main() {
+                    vColor = color;
+                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
                     
-                    void main() {
-                        vColor = color;
-                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-                        gl_PointSize = size * breathe * (300.0 / -mvPosition.z);
-                        gl_Position = projectionMatrix * mvPosition;
-                    }
-                `,
-                fragmentShader: `
-                    varying vec3 vColor;
+                    // Size attenuation based on depth
+                    gl_PointSize = (uSize * size * uPixelRatio * 40.0) / -mvPosition.z;
                     
-                    void main() {
-                        vec2 center = gl_PointCoord - vec2(0.5);
-                        float dist = length(center);
-                        
-                        if (dist > 0.5) discard;
-                        
-                        float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
-                        float glow = pow(alpha, 2.0);
-                        
-                        vec3 finalColor = vColor * (0.5 + glow * 0.5);
-                        gl_FragColor = vec4(finalColor, alpha * 0.9);
-                    }
-                `,
-                transparent: true,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false,
-                vertexColors: true
-            });
-            
-            particles = geometry;
-            particleSystem = new THREE.Points(geometry, material);
-            scene.add(particleSystem);
-            
-            // 初始化目标位置
-            targetPositions = createScatterPoints();
-        }
+                    // Simple breathing effect
+                    float breath = 1.0 + sin(uTime * 2.0 + position.x) * 0.1;
+                    gl_PointSize *= breath;
 
-        // ========== 冲击波效果 ==========
-        function createShockwave() {
-            const geometry = new THREE.RingGeometry(0.1, 0.2, 64);
-            shockwaveUniforms = {
-                time: { value: 0 },
-                opacity: { value: 0 }
+                    gl_Position = projectionMatrix * mvPosition;
+                    
+                    // Fade out particles that are too close
+                    vAlpha = smoothstep(0.0, 5.0, -mvPosition.z);
+                }
+            `,
+            fragmentShader: `
+                varying vec3 vColor;
+                varying float vAlpha;
+
+                void main() {
+                    // Create circular sprite with soft edge
+                    vec2 uv = gl_PointCoord - 0.5;
+                    float r = length(uv);
+                    if (r > 0.5) discard;
+
+                    // Glow effect: center bright, edges soft
+                    float glow = 1.0 - (r * 2.0);
+                    glow = pow(glow, 2.0);
+
+                    gl_FragColor = vec4(vColor, vAlpha * glow);
+                }
+            `,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            transparent: true
+        });
+
+        const particles = new THREE.Points(geometry, material);
+        scene.add(particles);
+
+        // --- Background Stars ---
+        const bgGeo = new THREE.BufferGeometry();
+        const bgCount = 2000;
+        const bgPos = new Float32Array(bgCount * 3);
+        for(let i=0; i<bgCount*3; i++) {
+            bgPos[i] = (Math.random() - 0.5) * 400;
+        }
+        bgGeo.setAttribute('position', new THREE.BufferAttribute(bgPos, 3));
+        const bgMat = new THREE.PointsMaterial({
+            size: 1.5, color: 0x444444, transparent: true, opacity: 0.6, sizeAttenuation: true
+        });
+        const starField = new THREE.Points(bgGeo, bgMat);
+        scene.add(starField);
+
+
+        // --- Shape Generation Logic ---
+
+        function getSpherePoint(i) {
+            const phi = Math.acos(-1 + (2 * i) / PARTICLE_COUNT);
+            const theta = Math.sqrt(PARTICLE_COUNT * Math.PI) * phi;
+            const r = 25;
+            return {
+                x: r * Math.cos(theta) * Math.sin(phi),
+                y: r * Math.sin(theta) * Math.sin(phi),
+                z: r * Math.cos(phi)
             };
-            
-            const material = new THREE.ShaderMaterial({
-                uniforms: shockwaveUniforms,
-                vertexShader: `
-                    uniform float time;
-                    void main() {
-                        vec3 pos = position * (1.0 + time * 50.0);
-                        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-                    }
-                `,
-                fragmentShader: `
-                    uniform float opacity;
-                    void main() {
-                        gl_FragColor = vec4(1.0, 0.3, 1.0, opacity);
-                    }
-                `,
-                transparent: true,
-                blending: THREE.AdditiveBlending,
-                side: THREE.DoubleSide
-            });
-            
-            const shockwave = new THREE.Mesh(geometry, material);
-            scene.add(shockwave);
         }
 
-        // ========== 形状生成函数 ==========
-        function createHeartPoints() {
-            const points = [];
-            const scale = 8;
+        function getHeartPoint(i) {
+            // Parametric Heart
+            const t = (i / PARTICLE_COUNT) * Math.PI * 2;
+            const x = 16 * Math.pow(Math.sin(t), 3);
+            const y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+            // Add volume
+            const r = Math.cbrt(Math.random()) * 0.35; 
+            const theta = Math.random() * Math.PI * 2;
             
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const t = (i / PARTICLE_COUNT) * Math.PI * 2;
-                const layers = Math.floor(i / (PARTICLE_COUNT / 20));
-                const z = (Math.random() - 0.5) * 5;
-                
-                const x = scale * 16 * Math.pow(Math.sin(t), 3);
-                const y = scale * (13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
-                
-                points.push(new THREE.Vector3(x, y - 10, z));
-            }
-            return points;
-        }
-
-        function createFlowerPoints() {
-            const points = [];
-            const petalCount = 5;
-            const scale = 15;
-            
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const angle = (i / PARTICLE_COUNT) * Math.PI * 2 * petalCount;
-                const r = scale * (1 + 0.5 * Math.sin(petalCount * angle));
-                const theta = angle;
-                
-                const x = r * Math.cos(theta);
-                const y = r * Math.sin(theta);
-                const z = (Math.random() - 0.5) * 3;
-                
-                points.push(new THREE.Vector3(x, y, z));
-            }
-            return points;
-        }
-
-        function createStarPoints() {
-            const points = [];
-            const outerRadius = 20;
-            const innerRadius = 8;
-            const spikes = 5;
-            
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const angle = (i / PARTICLE_COUNT) * Math.PI * 2;
-                const spikeAngle = (Math.PI * 2) / spikes;
-                const spikeIndex = Math.floor(angle / spikeAngle);
-                const angleInSpike = angle % spikeAngle;
-                
-                let radius;
-                if (angleInSpike < spikeAngle / 2) {
-                    radius = innerRadius + (outerRadius - innerRadius) * (angleInSpike / (spikeAngle / 2));
-                } else {
-                    radius = outerRadius - (outerRadius - innerRadius) * ((angleInSpike - spikeAngle / 2) / (spikeAngle / 2));
-                }
-                
-                const x = radius * Math.cos(angle);
-                const y = radius * Math.sin(angle);
-                const z = (Math.random() - 0.5) * 4;
-                
-                points.push(new THREE.Vector3(x, y, z));
-            }
-            return points;
-        }
-
-        function createMusicNotePoints() {
-            const points = [];
-            const scale = 15;
-            
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const t = i / PARTICLE_COUNT;
-                
-                if (t < 0.3) {
-                    // 音符头（圆形）
-                    const angle = (t / 0.3) * Math.PI * 2;
-                    const r = scale * 0.4;
-                    const x = r * Math.cos(angle) - scale;
-                    const y = r * Math.sin(angle) - scale;
-                    const z = (Math.random() - 0.5) * 2;
-                    points.push(new THREE.Vector3(x, y, z));
-                } else {
-                    // 音符杆
-                    const progress = (t - 0.3) / 0.7;
-                    const x = -scale + Math.sin(progress * Math.PI) * 2;
-                    const y = -scale + progress * scale * 2.5;
-                    const z = (Math.random() - 0.5) * 2;
-                    points.push(new THREE.Vector3(x, y, z));
-                }
-            }
-            return points;
-        }
-
-        function createLoveTextPoints() {
-            const points = [];
-            const letters = ['L', 'O', 'V', 'E'];
-            const letterSpacing = 12;
-            const startX = -letterSpacing * 1.5;
-            
-            for (let l = 0; l < letters.length; l++) {
-                const letterPoints = getLetterPoints(letters[l]);
-                const offsetX = startX + l * letterSpacing;
-                
-                for (let i = 0; i < PARTICLE_COUNT / 4; i++) {
-                    const point = letterPoints[i % letterPoints.length];
-                    points.push(new THREE.Vector3(
-                        point.x + offsetX,
-                        point.y,
-                        (Math.random() - 0.5) * 3
-                    ));
-                }
-            }
-            
-            return points;
-        }
-
-        function getLetterPoints(letter) {
-            const points = [];
-            const scale = 8;
-            
-            switch(letter) {
-                case 'L':
-                    for (let i = 0; i < 50; i++) {
-                        points.push(new THREE.Vector3(-scale/2, -scale + i * scale * 2 / 50, 0));
-                        if (i < 25) points.push(new THREE.Vector3(-scale/2 + i * scale / 25, -scale, 0));
-                    }
-                    break;
-                case 'O':
-                    for (let i = 0; i < 50; i++) {
-                        const angle = (i / 50) * Math.PI * 2;
-                        points.push(new THREE.Vector3(
-                            scale/2 * Math.cos(angle),
-                            scale * Math.sin(angle),
-                            0
-                        ));
-                    }
-                    break;
-                case 'V':
-                    for (let i = 0; i < 50; i++) {
-                        if (i < 25) {
-                            points.push(new THREE.Vector3(-scale/2 + i * scale / 50, scale - i * scale * 2 / 25, 0));
-                        } else {
-                            const j = i - 25;
-                            points.push(new THREE.Vector3(j * scale / 50, -scale + j * scale * 2 / 25, 0));
-                        }
-                    }
-                    break;
-                case 'E':
-                    for (let i = 0; i < 50; i++) {
-                        points.push(new THREE.Vector3(-scale/2, -scale + i * scale * 2 / 50, 0));
-                        if (i < 17) points.push(new THREE.Vector3(-scale/2 + i * scale / 17, scale, 0));
-                        if (i < 17) points.push(new THREE.Vector3(-scale/2 + i * scale / 17, 0, 0));
-                        if (i < 17) points.push(new THREE.Vector3(-scale/2 + i * scale / 17, -scale, 0));
-                    }
-                    break;
-            }
-            
-            return points;
-        }
-
-        function createScatterPoints() {
-            const points = [];
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                points.push(new THREE.Vector3(
-                    (Math.random() - 0.5) * 100,
-                    (Math.random() - 0.5) * 100,
-                    (Math.random() - 0.5) * 50
-                ));
-            }
-            return points;
-        }
-
-        // ========== 手势识别 ==========
-        function detectGesture(landmarks) {
-            if (!landmarks || landmarks.length === 0) return 'none';
-            
-            const fingers = {
-                thumb: isFingerExtended(landmarks, 4, 3, 2),
-                index: isFingerExtended(landmarks, 8, 7, 6),
-                middle: isFingerExtended(landmarks, 12, 11, 10),
-                ring: isFingerExtended(landmarks, 16, 15, 14),
-                pinky: isFingerExtended(landmarks, 20, 19, 18)
+            return { 
+                x: x * r * Math.cos(theta), 
+                y: (y + 6) * r * Math.sin(theta), 
+                z: (Math.random()-0.5) * 4
             };
-            
-            const extendedCount = Object.values(fingers).filter(v => v).length;
-            
-            // 完全张开手掌
-            if (extendedCount === 5) {
-                return 'open';
-            }
-            
-            // 握拳
-            if (extendedCount === 0) {
-                return 'fist';
-            }
-            
-            // V手势 (食指+中指)
-            if (fingers.index && fingers.middle && !fingers.ring && !fingers.pinky) {
-                return 'peace';
-            }
-            
-            // 摇滚手势 (食指+小拇指+大拇指)
-            if (fingers.thumb && fingers.index && fingers.pinky && !fingers.middle && !fingers.ring) {
-                return 'rock';
-            }
-            
-            // LOVE手势 (大拇指内扣，其他伸出)
-            if (!fingers.thumb && fingers.index && fingers.middle && fingers.ring && fingers.pinky) {
-                return 'love';
-            }
-            
-            return 'none';
         }
 
-        function isFingerExtended(landmarks, tip, mid, base) {
-            const tipY = landmarks[tip].y;
-            const midY = landmarks[mid].y;
-            const baseY = landmarks[base].y;
+        function getStarPoint(i) {
+            // Simple 5-point star in X-Y plane
+            const angle = Math.random() * Math.PI * 2;
+            const segment = angle / (Math.PI * 2 / 5);
+            const t = (segment - Math.floor(segment)) * 2; // 0..2
             
-            return tipY < midY && midY < baseY;
+            const outer = 15;
+            const inner = 6;
+            const rCalc = (t < 1) ? 
+                inner + (outer - inner) * t : 
+                outer - (outer - inner) * (t - 1);
+            
+            const r = rCalc * Math.sqrt(Math.random()); // Fill
+            const x = r * Math.cos(angle);
+            const y = r * Math.sin(angle);
+            const z = (Math.random() - 0.5) * 3;
+
+            return { x, y, z };
         }
 
-        // ========== MediaPipe 初始化 ==========
-        async function initMediaPipe() {
-            videoElement = document.getElementById('video');
-            
-            hands = new Hands({
-                locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-            });
-            
-            hands.setOptions({
-                maxNumHands: 1,
-                modelComplexity: 1,
-                minDetectionConfidence: 0.7,
-                minTrackingConfidence: 0.7
-            });
-            
-            hands.onResults(onHandsResults);
-            
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'user',
-                        width: { ideal: 640 },
-                        height: { ideal: 480 }
-                    } 
-                });
-                videoElement.srcObject = stream;
-                
-                const camera = new Camera(videoElement, {
-                    onFrame: async () => {
-                        if (cameraActive) {
-                            await hands.send({ image: videoElement });
-                        }
-                    },
-                    width: 640,
-                    height: 480
-                });
-                camera.start();
-                
-                document.getElementById('loading-text').textContent = '初始化完成！';
-                setTimeout(() => {
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('gesture-hint').style.display = 'block';
-                }, 500);
-                
-            } catch (error) {
-                console.error('摄像头访问失败:', error);
-                document.getElementById('loading-text').textContent = '摄像头访问失败，将使用随机动画模式';
-                setTimeout(() => {
-                    document.getElementById('loading').style.display = 'none';
-                    startRandomMode();
-                }, 2000);
+        function getNotePoint(i) {
+             // Two beamed music notes
+            const p = Math.random();
+            let x, y, z;
+            z = (Math.random() - 0.5) * 1;
+
+            if (p < 0.2) { // Left Head
+                const ang = Math.random() * Math.PI * 2;
+                const r = Math.sqrt(Math.random()) * 2.5;
+                x = -8 + r * Math.cos(ang);
+                y = -4 + r * Math.sin(ang) * 0.8; 
+            } else if (p < 0.4) { // Right Head
+                const ang = Math.random() * Math.PI * 2;
+                const r = Math.sqrt(Math.random()) * 2.5;
+                x = 4 + r * Math.cos(ang);
+                y = -3 + r * Math.sin(ang) * 0.8;
+            } else if (p < 0.7) { // Stems
+                const h = Math.random() * 12; 
+                const w = (Math.random() - 0.5) * 0.4;
+                const side = Math.random() > 0.5 ? -8 : 4;
+                x = side + w;
+                y = -4 + h;
+                if(side > 0) y = -3 + h;
+            } else { // Beam
+                const t = Math.random();
+                const xStart = -8; const xEnd = 4;
+                const yStart = 8; const yEnd = 9;
+                x = xStart + (xEnd - xStart) * t;
+                y = yStart + (yEnd - yStart) * t + (Math.random()-0.5)*0.5;
+                y -= Math.random() * 2.0;
             }
+            return { x, y, z };
         }
 
-        function onHandsResults(results) {
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                const gesture = detectGesture(results.multiHandLandmarks[0]);
-                updateGestureHint(gesture);
-                
-                if (gesture !== 'none' && gesture !== currentShape) {
-                    transitionToShape(gesture);
+        // A simple text shape, adjusted from 2.html logic for 'LOVE'
+        function getLovePoint(i) {
+            const segment = Math.floor((i / PARTICLE_COUNT) * 4); 
+            const subRatio = ((i / PARTICLE_COUNT) * 4) % 1;
+            let x=0, y=0, z=(Math.random()-0.5)*4; 
+            const spread = 2;
+            const height = 20;
+
+            if (segment === 0) { // L (x: -30 to -15)
+                if (subRatio < 0.7) { // Vertical
+                    x = -25 + (Math.random()-0.5)*spread;
+                    y = -10 + subRatio/0.7 * height;
+                } else { // Horizontal
+                    x = -25 + (subRatio-0.7)/0.3 * 10;
+                    y = -10 + (Math.random()-0.5)*spread;
+                }
+            } else if (segment === 1) { // O (Circle at x: -5)
+                const angle = subRatio * Math.PI * 2;
+                const radius = 6 + (Math.random()-0.5)*1;
+                x = -5 + radius * Math.cos(angle);
+                y = 0 + radius * Math.sin(angle) * 1.5; // Oval
+            } else if (segment === 2) { // V (Two lines from x: 10)
+                if (subRatio < 0.5) { // Left Line
+                    x = 10 + subRatio/0.5 * 5;
+                    y = 10 - subRatio/0.5 * 20;
+                    y += (Math.random()-0.5)*spread;
+                } else { // Right Line
+                    x = 15 - (subRatio-0.5)/0.5 * 5;
+                    y = -10 + (subRatio-0.5)/0.5 * 20;
+                    y += (Math.random()-0.5)*spread;
+                }
+            } else { // E (x: 25)
+                if (subRatio < 0.3) { // Left Stem
+                    x = 25 + (Math.random()-0.5)*spread;
+                    y = -10 + subRatio/0.3 * height;
+                } else if (subRatio < 0.5) { // Top Bar
+                    x = 25 + (subRatio-0.3)/0.2 * 10;
+                    y = 10 + (Math.random()-0.5)*spread;
+                } else if (subRatio < 0.7) { // Middle Bar
+                    x = 25 + (subRatio-0.5)/0.2 * 8;
+                    y = 0 + (Math.random()-0.5)*spread;
+                } else { // Bottom Bar
+                    x = 25 + (subRatio-0.7)/0.3 * 10;
+                    y = -10 + (Math.random()-0.5)*spread;
                 }
             }
+            return { x, y: y + 5, z }; // Shift up slightly for centering
         }
 
-        function updateGestureHint(gesture) {
-            const hintElement = document.getElementById('gesture-hint');
-            const hints = {
-                'fist': '✊ 握拳 → 爱心',
-                'open': '🖐️ 张开 → 粒子散开',
-                'peace': '✌️ V手势 → 五角星',
-                'rock': '🤘 摇滚 → 音符',
-                'love': '🤟 LOVE → 文字',
-                'none': '👋 等待检测手势...'
-            };
-            hintElement.textContent = hints[gesture] || hints['none'];
-        }
+        function updateTargets(shape) {
+            if (shape === state.targetShape && !state.isExploding) return;
+            state.targetShape = shape;
+            const targetAttr = geometry.attributes.target.array;
 
-        function transitionToShape(gesture) {
-            currentShape = gesture;
-            
-            switch(gesture) {
-                case 'fist':
-                    targetPositions = createHeartPoints();
-                    updateParticleColors([1.0, 0.2, 0.5]);
-                    break;
-                case 'open':
-                    targetPositions = createScatterPoints();
-                    updateParticleColors('rainbow');
-                    triggerShockwave();
-                    break;
-                case 'peace':
-                    targetPositions = createStarPoints();
-                    updateParticleColors([1.0, 0.8, 0.0]);
-                    break;
-                case 'rock':
-                    targetPositions = createMusicNotePoints();
-                    updateParticleColors([0.5, 0.0, 1.0]);
-                    break;
-                case 'love':
-                    targetPositions = createLoveTextPoints();
-                    updateParticleColors([1.0, 0.0, 1.0]);
-                    break;
-            }
-        }
-
-        function updateParticleColors(colorData) {
-            const colors = particles.attributes.color.array;
-            
-            for (let i = 0; i < colors.length; i += 3) {
-                if (colorData === 'rainbow') {
-                    const hue = Math.random();
-                    const color = new THREE.Color().setHSL(hue, 1.0, 0.6);
-                    colors[i] = color.r;
-                    colors[i + 1] = color.g;
-                    colors[i + 2] = color.b;
-                } else {
-                    colors[i] = colorData[0] + (Math.random() - 0.5) * 0.2;
-                    colors[i + 1] = colorData[1] + (Math.random() - 0.5) * 0.2;
-                    colors[i + 2] = colorData[2] + (Math.random() - 0.5) * 0.2;
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                let p;
+                switch (shape) {
+                    case 'heart': p = getHeartPoint(i); break;
+                    case 'star': p = getStarPoint(i); break;
+                    case 'note': p = getNotePoint(i); break;
+                    case 'love': p = getLovePoint(i); break;
+                    default: p = getSpherePoint(i); break;
                 }
+                // Add some random noise to target to keep it organic
+                const noise = 0.5;
+                targetAttr[i * 3] = p.x + (Math.random()-0.5)*noise;
+                targetAttr[i * 3 + 1] = p.y + (Math.random()-0.5)*noise;
+                targetAttr[i * 3 + 2] = p.z + (Math.random()-0.5)*noise;
             }
-            
-            particles.attributes.color.needsUpdate = true;
+            geometry.attributes.target.needsUpdate = true;
+
+            // Set Color Target based on shape
+            let targetColor = new THREE.Color();
+            if (shape === 'heart') targetColor.setHex(0xff0055);
+            else if (shape === 'star') targetColor.setHex(0xffdd00);
+            else if (shape === 'note') targetColor.setHex(0x00ffcc);
+            else if (shape === 'love') targetColor.setHex(0xe600ff);
+            else targetColor.setHex(0x00f3ff);
         }
 
-        function triggerShockwave() {
-            shockwaveUniforms.time.value = 0;
-            shockwaveUniforms.opacity.value = 1.0;
-        }
+        function animateParticles() {
+            const positions = geometry.attributes.position.array;
+            const targets = geometry.attributes.target.array;
+            const velocityArray = geometry.attributes.velocity.array; // Assuming it's added as a custom attribute for physics
+            
+            const isExplode = state.isExploding;
+            const force = EXPLOSION_FORCE;
 
-        // ========== 动画循环 ==========
-        let time = 0;
-        function animate() {
-            requestAnimationFrame(animate);
-            
-            time += 0.01;
-            
-            // 更新粒子位置
-            const positions = particles.attributes.position.array;
-            const velocities = particles.attributes.velocity.array;
-            
             for (let i = 0; i < PARTICLE_COUNT; i++) {
                 const i3 = i * 3;
-                const target = targetPositions[i];
-                
-                // 计算吸引力
-                const dx = target.x - positions[i3];
-                const dy = target.y - positions[i3 + 1];
-                const dz = target.z - positions[i3 + 2];
-                
-                const force = currentShape === 'open' ? 0.001 : 0.05;
-                
-                velocities[i3] += dx * force;
-                velocities[i3 + 1] += dy * force;
-                velocities[i3 + 2] += dz * force;
-                
-                // 应用阻尼
-                const damping = currentShape === 'open' ? 0.95 : 0.85;
-                velocities[i3] *= damping;
-                velocities[i3 + 1] *= damping;
-                velocities[i3 + 2] *= damping;
-                
-                // 更新位置
-                positions[i3] += velocities[i3];
-                positions[i3 + 1] += velocities[i3 + 1];
-                positions[i3 + 2] += velocities[i3 + 2];
+
+                let px = positions[i3];
+                let py = positions[i3 + 1];
+                let pz = positions[i3 + 2];
+
+                let vx = velocityArray[i3];
+                let vy = velocityArray[i3 + 1];
+                let vz = velocityArray[i3 + 2];
+
+                if (isExplode) {
+                    // Explode Physics (Repulsion from center)
+                    // The target points are used as initial random direction in original 1.html. We keep it simple.
+                    vx += px * force * 0.05 + (Math.random()-0.5)*0.5;
+                    vy += py * force * 0.05 + (Math.random()-0.5)*0.5;
+                    vz += pz * force * 0.05 + (Math.random()-0.5)*0.5;
+
+                } else {
+                    // Shape Formation Physics (Spring/Attraction)
+                    const tx = targets[i3];
+                    const ty = targets[i3 + 1];
+                    const tz = targets[i3 + 2];
+
+                    const dx = tx - px;
+                    const dy = ty - py;
+                    const dz = tz - pz;
+
+                    vx += dx * ATTRACTION_STRENGTH;
+                    vy += dy * ATTRACTION_STRENGTH;
+                    vz += dz * ATTRACTION_STRENGTH;
+
+                    // Add some curl noise/turbulence
+                    vx += Math.sin(py * 0.1 + state.time) * 0.02;
+                    vy += Math.cos(px * 0.1 + state.time) * 0.02;
+                }
+
+                // Apply Friction
+                vx *= FRICTION;
+                vy *= FRICTION;
+                vz *= FRICTION;
+
+                // Update Position
+                positions[i3] += vx;
+                positions[i3 + 1] += vy;
+                positions[i3 + 2] += vz;
+
+                // Save Velocity
+                velocityArray[i3] = vx;
+                velocityArray[i3 + 1] = vy;
+                velocityArray[i3 + 2] = vz;
             }
-            
-            particles.attributes.position.needsUpdate = true;
-            
-            // 呼吸动画
-            const breathe = 1.0 + Math.sin(time * 2) * 0.1;
-            particleSystem.material.uniforms.breathe.value = breathe;
-            particleSystem.material.uniforms.time.value = time;
-            
-            // 旋转效果
-            if (currentShape !== 'open' && currentShape !== 'scatter') {
-                particleSystem.rotation.z = Math.sin(time * 0.5) * 0.1;
-            }
-            
-            // 更新冲击波
-            if (shockwaveUniforms.opacity.value > 0) {
-                shockwaveUniforms.time.value += 0.02;
-                shockwaveUniforms.opacity.value -= 0.02;
-            }
-            
-            renderer.render(scene, camera);
+
+            geometry.attributes.position.needsUpdate = true;
         }
 
-        // ========== 随机模式（摄像头失败时的备选方案）==========
-        function startRandomMode() {
-            const shapes = ['fist', 'peace', 'rock', 'love', 'open'];
-            let currentIndex = 0;
+
+        function handleGestureResult(gesture) {
+            // Update UI status
+            statusText.innerText = `GESTURE: ${gesture.toUpperCase()}`;
+
+            // Update particle state
+            switch (gesture) {
+                case 'Heart':
+                    updateTargets('heart');
+                    state.isExploding = false;
+                    break;
+                case 'Open':
+                    state.isExploding = true;
+                    // Trigger color change to explosion color
+                    material.uniforms.uMode.value = 1.0; 
+                    break;
+                case 'Victory':
+                    updateTargets('star');
+                    state.isExploding = false;
+                    break;
+                case 'Rock':
+                    updateTargets('note');
+                    state.isExploding = false;
+                    break;
+                case 'Love':
+                    updateTargets('love');
+                    state.isExploding = false;
+                    break;
+                case 'None':
+                default:
+                    // Drift back to sphere if it's not already
+                    if (state.targetShape !== 'sphere') {
+                        updateTargets('sphere');
+                    }
+                    state.isExploding = false;
+                    break;
+            }
             
-            setInterval(() => {
-                transitionToShape(shapes[currentIndex]);
-                currentIndex = (currentIndex + 1) % shapes.length;
-            }, 3000);
+            // Set explosion mode uniform (will be 0.0 if not 'Open')
+            if (gesture !== 'Open') {
+                 material.uniforms.uMode.value = 0.0;
+            }
+        }
+        
+        // --- MediaPipe Hands ---
+        const video = document.getElementById('video-preview');
+        const statusText = document.getElementById('status-text');
+        const statusDot = document.getElementById('cam-status');
+        let handLandmarker = undefined;
+        let lastVideoTime = -1;
+
+        async function initMediaPipe() {
+            try {
+                const vision = await FilesetResolver.forVisionTasks(
+                    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+                );
+                handLandmarker = await HandLandmarker.createFromOptions(vision, {
+                    baseOptions: {
+                        modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+                        delegate: "GPU"
+                    },
+                    runningMode: "VIDEO",
+                    numHands: 1
+                });
+                document.getElementById('loader').style.opacity = '0';
+                setTimeout(() => document.getElementById('loader').style.display = 'none', 800);
+                startCamera();
+            } catch (e) {
+                console.error(e);
+                document.getElementById('loader-msg').innerText = "ERROR LOADING AI MODEL";
+                statusDot.classList.add('error');
+                statusText.innerText = "Error Loading AI";
+            }
         }
 
-        // ========== 控制按钮 ==========
-        document.getElementById('toggle-camera').addEventListener('click', function() {
-            cameraActive = !cameraActive;
-            this.textContent = cameraActive ? '关闭摄像头' : '开启摄像头';
-        });
+        async function startCamera() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert("Camera API not supported");
+                return;
+            }
+            try {
+                // 使用 CONFIG 定义的分辨率 (引入自 2.html)
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: CONFIG.camWidth, 
+                        height: CONFIG.camHeight, 
+                        frameRate: { ideal: 30 } 
+                    }
+                });
+                video.srcObject = stream;
+                video.addEventListener('loadeddata', () => {
+                    state.cameraActive = true;
+                    video.style.display = 'block';
+                    statusDot.classList.remove('error');
+                    statusDot.classList.add('active');
+                    statusText.innerText = "Camera Active";
+                    document.getElementById('toggle-cam').innerText = "Stop Cam";
+                    predictWebcam();
+                });
+            } catch (err) {
+                console.error("Camera access denied", err);
+                statusDot.classList.add('error');
+                statusText.innerText = "Camera Denied";
+            }
+        }
+        
+        /**
+         * 替换原有 detectGesture 函数，使用更具判断性的逻辑 (引入自 2.html)
+         * @param {Array} lm - Hand landmarks from MediaPipe.
+         * @returns {string} - Detected gesture name.
+         */
+        function detectGesture(lm) {
+            // Landmarks: 0=Wrist, 4=ThumbTip, 8=IndexTip, 12=MiddleTip, 16=RingTip, 20=PinkyTip
+            const wrist = lm[0];
+            
+            // 检查指尖是否比指关节更远离手腕 (Extended logic from 1.html, refined from 2.html)
+            function isExtended(tipIdx, pipIdx) {
+                const dTip = Math.hypot(lm[tipIdx].x - wrist.x, lm[tipIdx].y - wrist.y, lm[tipIdx].z - wrist.z);
+                const dPip = Math.hypot(lm[pipIdx].x - wrist.x, lm[pipIdx].y - wrist.y, lm[pipIdx].z - wrist.z);
+                // 增加一个简单的阈值以避免噪音
+                return dTip > dPip * 1.05; 
+            }
 
-        document.getElementById('toggle-video').addEventListener('click', function() {
-            const video = document.getElementById('video');
-            if (video.style.display === 'none') {
-                video.style.display = 'block';
-                this.textContent = '隐藏视频';
+            const thumbExt = isExtended(4, 2);
+            const indexExt = isExtended(8, 6);
+            const middleExt = isExtended(12, 10);
+            const ringExt = isExtended(16, 14);
+            const pinkyExt = isExtended(20, 18);
+            
+            const fingers = [indexExt, middleExt, ringExt, pinkyExt];
+            const fingersUp = fingers.filter(Boolean).length;
+            
+            let gesture = 'None';
+            
+            // 1. Fist (All fingers closed) -> Heart
+            if (fingersUp === 0 && !thumbExt) {
+                gesture = 'Heart'; 
+            } 
+            // 2. Open Palm (All 5 fingers open) -> Explode
+            else if (fingersUp === 4 && thumbExt) {
+                 gesture = 'Open';
+            } 
+            // 3. Victory (Index and Middle up) -> Star
+            else if (indexExt && middleExt && !ringExt && !pinkyExt) {
+                gesture = 'Victory';
+            } 
+            // 4. Rock (Index and Pinky up) -> Note
+            else if (indexExt && pinkyExt && !middleExt && !ringExt) {
+                gesture = 'Rock';
+            }
+            // 5. Palm+Thumb In (All 4 fingers up, Thumb closed/tucked) -> LOVE
+            // The guide in 1.html suggests Palm+Thumb In. This translates to 4 fingers open, thumb closed.
+            else if (fingersUp === 4 && !thumbExt) {
+                gesture = 'Love';
+            } 
+            // Fallback for Open (Explode) - covers spread wide but no thumb
+            else if (fingersUp >= 4) {
+                gesture = 'Open';
+            }
+            
+            return gesture;
+        }
+
+
+        function predictWebcam() {
+            // Check if camera is active
+            if (!state.cameraActive || !handLandmarker) {
+                 window.requestAnimationFrame(predictWebcam);
+                 return;
+            }
+
+            const now = performance.now();
+            const timeDiff = (now - lastVideoTime);
+            
+            if (timeDiff > 1000 / 30) { // Limit to ~30 FPS
+                lastVideoTime = now;
+                
+                if (video.currentTime !== lastVideoTime) {
+                    const results = handLandmarker.detectForVideo(video, video.currentTime);
+
+                    if (results.handLandmarks.length > 0) {
+                        const landmarks = results.handLandmarks[0];
+                        const currentGesture = detectGesture(landmarks); 
+
+                        // NEW: Confidence check logic (引入自 2.html)
+                        if (currentGesture && currentGesture !== 'None') {
+                            state.handDetected = true;
+                            if (currentGesture === state.lastGesture) {
+                                state.gestureConfidence += 1; // 连续帧数增加
+                                if (state.gestureConfidence >= CONFIG.gestureConfidenceThreshold) {
+                                    // 达到置信阈值，切换手势
+                                    if (currentGesture !== state.gesture) {
+                                        state.gesture = currentGesture;
+                                        handleGestureResult(currentGesture);
+                                    }
+                                    state.lastGesture = currentGesture;
+                                    state.gestureConfidence = 0; // 重置计数器
+                                }
+                            } else {
+                                // 识别到新手势，但未达到阈值
+                                state.lastGesture = currentGesture;
+                                state.gestureConfidence = 1; 
+                            }
+                        } else {
+                            state.handDetected = false;
+                            state.gestureConfidence = 0;
+                            // 如果手势是 None，并且当前状态不是 None，则切换回默认
+                            if (state.gesture !== 'None') {
+                                state.gesture = 'None';
+                                handleGestureResult('None');
+                                state.lastGesture = 'None';
+                            }
+                        }
+                    } else {
+                        // 未检测到手
+                        state.handDetected = false;
+                        state.gestureConfidence = 0;
+                        // 如果手势不是 None，则切换回默认
+                        if (state.gesture !== 'None') {
+                            state.gesture = 'None';
+                            handleGestureResult('None');
+                            state.lastGesture = 'None';
+                        }
+                        statusText.innerText = `Camera Active: No Hand`; // 补充无手状态的UI提示
+                    }
+                }
+            }
+
+            window.requestAnimationFrame(predictWebcam);
+        }
+
+        // --- Main Animation Loop ---
+
+        function animate() {
+            state.time += 0.016; // Simple time accumulation
+            material.uniforms.uTime.value = state.time;
+
+            controls.update();
+            
+            // Auto-rotation when not exploding, slightly adjust rotation based on state
+            if (state.isExploding) {
+                controls.autoRotate = false;
+                // Add some chaotic rotation
+                particles.rotation.y += Math.sin(state.time * 0.5) * 0.005;
+                particles.rotation.x += Math.cos(state.time * 0.3) * 0.005;
             } else {
-                video.style.display = 'none';
-                this.textContent = '显示视频';
+                controls.autoRotate = true;
+                // Gently rotate shapes manually
+                particles.rotation.y = Math.sin(state.time * 0.2) * 0.2;
             }
-        });
 
-        // ========== 窗口大小调整 ==========
-        function onWindowResize() {
+            // Animate Particles
+            animateParticles();
+
+            // Render
+            controls.update();
+            renderer.render(scene, camera);
+
+            window.requestAnimationFrame(animate);
+        }
+
+        // --- Init ---
+        
+        window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-        }
+            material.uniforms.uPixelRatio.value = renderer.getPixelRatio();
+        });
 
-        // ========== 启动 ==========
-        initThree();
+        document.getElementById('toggle-cam').addEventListener('click', () => {
+            if (state.cameraActive) {
+                // Stop tracks
+                const stream = video.srcObject;
+                if(stream) {
+                    const tracks = stream.getTracks();
+                    tracks.forEach(track => track.stop());
+                }
+                video.srcObject = null;
+                video.style.display = 'none';
+                state.cameraActive = false;
+                statusText.innerText = "Camera Paused";
+                statusDot.classList.remove('active');
+                document.getElementById('toggle-cam').innerText = "Toggle Cam";
+            } else {
+                startCamera();
+                // predictWebcam is called inside startCamera's loadeddata listener
+            }
+        });
+
+        // Start everything
         initMediaPipe();
         animate();
+        // predictWebcam will start inside startCamera once loaded
     </script>
 </body>
 </html>
