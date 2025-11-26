@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手势控制粒子系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none; /* 防止选中文字 */
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* 摄像头预览容器 */
+        #video-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 160px;
+            height: 120px;
+            z-index: 2;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            overflow: hidden;
+            transform: scaleX(-1);
+            opacity: 0; /* 初始隐藏，权限获取后显示 */
+            transition: opacity 1s;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* 状态文字 */
+        #status {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ffcc;
+            font-size: 16px;
+            z-index: 2;
+            text-shadow: 0 0 5px rgba(0, 255, 204, 0.8);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 255, 204, 0.3);
+            display: none; /* 初始隐藏 */
+        }
+
+        /* --- 权限弹窗样式 --- */
+        #permission-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px); /* 毛玻璃效果 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s;
+        }
+
+        .modal-content {
+            background: rgba(20, 20, 30, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.8), 0 0 20px rgba(0, 255, 204, 0.2);
+            max-width: 400px;
+            width: 80%;
+        }
+
+        .modal-content h1 {
+            color: #fff;
+            margin-top: 0;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        .modal-content p {
+            color: #aaa;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .start-btn {
+            background: linear-gradient(45deg, #ff0055, #00ffcc);
+            border: none;
+            padding: 12px 35px;
+            color: white;
+            font-size: 18px;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .start-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.6);
+        }
+
+        .start-btn:active {
+            transform: scale(0.95);
+        }
+
+        #loading-text {
+            color: #00ffcc;
+            margin-top: 20px;
+            font-size: 14px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="permission-overlay">
+    <div class="modal-content">
+        <h1>开启交互体验</h1>
+        <p>本体验需要使用摄像头识别手势。<br>握拳聚合粒子，张手散开粒子。<br>所有处理均在本地进行。</p>
+        <button class="start-btn" id="start-btn">开启摄像头</button>
+        <div id="loading-text">正在初始化 AI 模型...</div>
+    </div>
+</div>
+
+<div id="status">准备就绪</div>
+
+<div id="video-container">
+    <video id="input_video"></video>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+    // --- 1. 基础配置与粒子系统 ---
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const videoElement = document.getElementById('input_video');
+    const statusElement = document.getElementById('status');
+    const videoContainer = document.getElementById('video-container');
+
+    // UI 元素
+    const overlay = document.getElementById('permission-overlay');
+    const startBtn = document.getElementById('start-btn');
+    const loadingText = document.getElementById('loading-text');
+
+    let width, height;
+    let particles = [];
+    const PARTICLE_COUNT = 1500;
+    let isGathered = false;
+    let currentShape = 'heart';
+
+    // 粒子类定义
+    class Particle {
+        constructor() {
+            this.x = Math.random() * width;
+            this.y = Math.random() * height;
+            this.vx = (Math.random() - 0.5) * 2;
+            this.vy = (Math.random() - 0.5) * 2;
+            this.targetX = this.x;
+            this.targetY = this.y;
+            this.color = `hsl(${Math.random() * 60 + 300}, 100%, 60%)`;
+            this.size = Math.random() * 2 + 1;
+            this.friction = 0.94;
+            this.ease = 0.08;
+        }
+
+        update() {
+            if (isGathered) {
+                this.x += (this.targetX - this.x) * this.ease;
+                this.y += (this.targetY - this.y) * this.ease;
+            } else {
+                this.x += this.vx;
+                this.y += this.vy;
+                if (this.x < 0 || this.x > width) this.vx *= -1;
+                if (this.y < 0 || this.y > height) this.vy *= -1;
+            }
+        }
+
+        draw() {
+            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    // 形状生成
+    function getHeartPoint(t) {
+        const scale = Math.min(width, height) / 35;
+        const x = 16 * Math.pow(Math.sin(t), 3);
+        const y = -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t));
+        return { x: x * scale + width / 2, y: y * scale + height / 2 };
+    }
+
+    function getFlowerPoint(t) {
+        const k = 4;
+        const scale = Math.min(width, height) / 4;
+        const r = Math.cos(k * t) * scale;
+        const x = r * Math.cos(t);
+        const y = r * Math.sin(t);
+        return { x: x + width / 2, y: y + height / 2 };
+    }
+
+    function updateTargets(shapeType) {
+        for (let i = 0; i < particles.length; i++) {
+            let p;
+            const t = (i / particles.length) * Math.PI * 2 * (shapeType === 'flower' ? 2 : 1);
+            if (shapeType === 'heart') {
+                p = getHeartPoint(t);
+                particles[i].color = `hsl(${Math.random() * 40 + 330}, 90%, 60%)`;
+            } else {
+                p = getFlowerPoint(t);
+                particles[i].color = `hsl(${Math.random() * 60 + 180}, 90%, 60%)`;
+            }
+            particles[i].targetX = p.x + (Math.random() - 0.5) * 10;
+            particles[i].targetY = p.y + (Math.random() - 0.5) * 10;
+        }
+    }
+
+    // 初始化粒子（不开启摄像头）
+    function initParticles() {
+        resize();
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
+            particles.push(new Particle());
+        }
+        updateTargets('heart');
+        animate();
+    }
+
+    function resize() {
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width;
+        canvas.height = height;
+    }
+
+    function animate() {
+        ctx.fillStyle = 'rgba(5, 5, 5, 0.2)';
+        ctx.fillRect(0, 0, width, height);
+        particles.forEach(p => {
+            p.update();
+            p.draw();
+        });
+        requestAnimationFrame(animate);
+    }
+
+    window.addEventListener('resize', resize);
+
+    // **重要**：先启动粒子系统作为背景，但不启动摄像头
+    initParticles();
+
+
+    // --- 2. 摄像头与 AI 逻辑 (封装在启动函数中) ---
+
+    let hands;
+    let camera;
+
+    async function startCameraApp() {
+        startBtn.style.display = 'none'; // 隐藏按钮
+        loadingText.style.display = 'block'; // 显示加载中
+
+        // 配置 MediaPipe
+        hands = new Hands({locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }});
+
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        // 初始化摄像头
+        camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480
+        });
+
+        try {
+            await camera.start();
+            // 成功开启后
+            overlay.style.opacity = 0;
+            setTimeout(() => { overlay.style.display = 'none'; }, 500);
+            videoContainer.style.opacity = 1; // 显示右下角预览
+            statusElement.style.display = 'block';
+            statusElement.innerText = "请在摄像头前展示手势";
+        } catch (err) {
+            console.error(err);
+            loadingText.innerText = "无法访问摄像头，请检查权限设置。";
+            loadingText.style.color = "#ff3333";
+        }
+    }
+
+    // 手势判定算法
+    function detectGesture(landmarks) {
+        const wrist = landmarks[0];
+        const tips = [8, 12, 16, 20];
+        let totalDist = 0;
+        tips.forEach(idx => {
+            const tip = landmarks[idx];
+            const dist = Math.sqrt(Math.pow(tip.x - wrist.x, 2) + Math.pow(tip.y - wrist.y, 2));
+            totalDist += dist;
+        });
+        const avgDist = totalDist / tips.length;
+        return avgDist < 0.25 ? 'FIST' : 'OPEN';
+    }
+
+    function onResults(results) {
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            const landmarks = results.multiHandLandmarks[0];
+            const gesture = detectGesture(landmarks);
+
+            if (gesture === 'FIST') {
+                if (!isGathered) {
+                    currentShape = currentShape === 'heart' ? 'flower' : 'heart';
+                    updateTargets(currentShape);
+                    statusElement.innerText = "识别到：握拳 (聚合)";
+                    isGathered = true;
+                    particles.forEach(p => {
+                        p.vx = (width/2 - p.x) * 0.05;
+                        p.vy = (height/2 - p.y) * 0.05;
+                    });
+                }
+            } else {
+                if (isGathered) {
+                    statusElement.innerText = "识别到：手掌 (散开)";
+                    isGathered = false;
+                    particles.forEach(p => {
+                        p.vx = (Math.random() - 0.5) * 15;
+                        p.vy = (Math.random() - 0.5) * 15;
+                    });
+                }
+            }
+        } else {
+            if(isGathered) {
+                isGathered = false;
+                statusElement.innerText = "未检测到手势";
+            }
+        }
+    }
+
+    // --- 3. 绑定点击事件 ---
+    startBtn.addEventListener('click', startCameraApp);
+
+</script>
+</body>
+</html>
