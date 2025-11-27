@@ -1,60 +1,824 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>Grid Practice</title>
-  </head>
-  <body style="padding-bottom: 1000px;">
-    <div style="
-      display: grid;
-      grid-template-columns: 100px 100px;
-    ">
-      <div style="background-color: lightblue;">div 1</div>
-      <div style="background-color: lightpink;">div 2<p>text</p></div>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Cyber Particles x Hand Gestures (Cross-Browser)</title>
+    <style>
+        :root {
+            --primary: #00f3ff;
+            --secondary: #bc13fe;
+        }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Courier New', Courier, monospace;
+            color: white;
+            user-select: none;
+        }
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        /* UI Overlay */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .hud-text {
+            text-shadow: 0 0 10px var(--primary);
+            pointer-events: auto;
+        }
+        #status {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+        #gesture-name {
+            font-size: 32px;
+            font-weight: bold;
+            color: var(--primary);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 10px;
+            transition: all 0.3s;
+        }
+        
+        /* Loading Screen */
+        #loader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.8s ease;
+        }
+        .loader-ring {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(0, 243, 255, 0.2);
+            border-top: 4px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        #loader p {
+            margin-top: 20px;
+            color: var(--primary);
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+        #start-btn {
+            margin-top: 30px;
+            padding: 12px 30px;
+            background: transparent;
+            border: 2px solid var(--primary);
+            color: var(--primary);
+            font-size: 16px;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.3s;
+            display: none;
+            pointer-events: auto;
+        }
+        #start-btn:hover {
+            background: var(--primary);
+            color: #000;
+            box-shadow: 0 0 20px var(--primary);
+        }
+
+        /* Controls */
+        .controls {
+            pointer-events: auto;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .btn-toggle {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: 0.3s;
+        }
+        .btn-toggle:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .video-preview {
+            width: 160px;
+            height: 120px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+            transform: scaleX(-1); /* Mirror */
+            display: block;
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+    
+    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+</head>
+<body>
+
+    <div id="loader">
+        <div class="loader-ring"></div>
+        <p id="loader-text">INITIALIZING NEURAL INTERFACE...</p>
+        <button id="start-btn">ACTIVATE SYSTEM</button>
     </div>
 
-    <div style="
-      margin-top: 30px;
-      display: grid;
-      grid-template-columns: 100px 100px 200px;
-    ">
-      <div style="background-color: lightblue;">100px</div>
-      <div style="background-color: lightpink;">100px<p>text</p></div>
-      <div style="background-color: lightblue;">200px</div>
-      <div style="background-color: lightpink;">100px</div>
+    <div id="ui-layer">
+        <div>
+            <div id="status">WAITING FOR INPUT...</div>
+            <div id="gesture-name">SYSTEM READY</div>
+        </div>
+        
+        <div class="controls">
+            <div class="video-preview" id="camera-container">
+                <video id="input-video" playsinline></video>
+            </div>
+            <button class="btn-toggle" id="cam-toggle">TOGGLE CAM</button>
+        </div>
     </div>
 
-    <div style="
-      margin-top: 30px;
-      display: grid;
-      grid-template-columns: 100px 1fr;
-    ">
-      <div style="background-color: lightblue;">100px</div>
-      <div style="background-color: lightpink;">1fr</div>
-    </div>
+    <div id="canvas-container"></div>
 
-    <div style="
-      margin-top: 30px;
-      display: grid;
-      grid-template-columns: 100px 1fr 2fr;
-    ">
-      <div style="background-color: lightblue;">100px</div>
-      <div style="background-color: lightpink;">1fr</div>
-      <div style="background-color: lightblue;">2fr</div>
-    </div>
+    <script>
+        // 使用立即执行函数表达式 (IIFE) 来封装代码，避免全局污染
+        (function() {
+        
+        // 确保 THREE.js 和 MediaPipe 已经加载
+        if (typeof THREE === 'undefined' || typeof Hands === 'undefined') {
+            console.error("Three.js or MediaPipe Hands failed to load. Check network connection.");
+            document.getElementById('loader-text').innerText = "FATAL ERROR: LIBRARY LOAD FAILED.";
+            return;
+        }
+        
+        // 从全局对象获取
+        const { 
+            Scene, PerspectiveCamera, WebGLRenderer, BufferGeometry, BufferAttribute, 
+            ShaderMaterial, Points, Clock, Vector2, FogExp2, AdditiveBlending, 
+            PointsMaterial, Color 
+        } = THREE;
 
-    <div style="
-      margin-top: 30px;
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      column-gap: 20px;
-      row-gap: 40px;
-    ">
-      <div style="background-color: lightblue; height: 200px;">1fr</div>
-      <div style="background-color: lightpink; height: 200px;">1fr</div>
-      <div style="background-color: lightblue; height: 200px;">1fr</div>
-      <div style="background-color: lightpink; height: 200px;">1fr</div>
-      <div style="background-color: lightblue; height: 200px;">1fr</div>
-      <div style="background-color: lightpink; height: 200px;">1fr</div>
-    </div>
-  </body>
+        // ==========================================
+        // CONFIGURATION
+        // ==========================================
+        const CONFIG = {
+            particleCount: 12000,
+            particleSize: 8.0,   // 粒子基础尺寸
+            moveSpeed: 0.08,   
+            scatterForce: 0.9, 
+            colors: {
+                scatter: new Color('#00f3ff'), 
+                heart: new Color('#ff0055'),   
+                star: new Color('#ffe600'),    
+                flower: new Color('#ff69b4'),  
+                note: new Color('#bc13fe'),    
+                text: new Color('#ffffff')     
+            }
+        };
+
+        // ==========================================
+        // SHADERS (GLSL)
+        // ==========================================
+        const vertexShader = `
+            uniform float uTime;
+            uniform float uPixelRatio;
+            uniform float uSize;
+            
+            attribute float sizeRandom;
+            attribute vec3 color;
+            
+            varying vec3 vColor;
+
+            void main() {
+                vColor = color;
+                
+                vec3 pos = position;
+                
+                vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                
+                gl_Position = projectionMatrix * mvPosition;
+                
+                // Size attenuation based on depth
+                gl_PointSize = uSize * sizeRandom * uPixelRatio * (300.0 / -mvPosition.z);
+            }
+        `;
+
+        const fragmentShader = `
+            uniform float uTime;
+            varying vec3 vColor;
+
+            void main() {
+                // Create a soft glowing point sprite
+                vec2 uv = gl_PointCoord.xy - 0.5;
+                float dist = length(uv);
+                
+                // Circular gradient
+                float alpha = 1.0 - smoothstep(0.0, 0.5, dist);
+                
+                // Make core brighter
+                alpha = pow(alpha, 3.0);
+                
+                if (alpha < 0.01) discard;
+
+                // Add inner glow
+                vec3 finalColor = vColor * 2.5; 
+                
+                gl_FragColor = vec4(finalColor, alpha);
+            }
+        `;
+
+        // ==========================================
+        // SYSTEM VARIABLES
+        // ==========================================
+        let scene, camera, renderer, material, geometry, points;
+        let clock = new Clock();
+        
+        // Particle Data
+        const positions = new Float32Array(CONFIG.particleCount * 3);
+        const targets = new Float32Array(CONFIG.particleCount * 3);
+        const velocities = new Float32Array(CONFIG.particleCount * 3); // For physics
+        const colors = new Float32Array(CONFIG.particleCount * 3);
+        const sizes = new Float32Array(CONFIG.particleCount);
+
+        // State Management
+        let currentShape = 'scatter'; 
+        let isHandDetected = false;
+
+        // Pre-calculated shapes
+        let shapeCache = {};
+
+        // Canvas for text generation
+        const textCanvas = document.createElement('canvas');
+        const textCtx = textCanvas.getContext('2d');
+        let handsInstance = null; // MediaPipe Hands 实例
+
+        // ==========================================
+        // SHAPE GENERATORS
+        // ==========================================
+        const ShapeUtils = {
+            // Helper: Sphere distribution
+            getSpherePoint: (r) => {
+                const u = Math.random();
+                const v = Math.random();
+                const theta = 2 * Math.PI * u;
+                const phi = Math.acos(2 * v - 1);
+                const x = r * Math.sin(phi) * Math.cos(theta);
+                const y = r * Math.sin(phi) * Math.sin(theta);
+                const z = r * Math.cos(phi);
+                return {x, y, z};
+            },
+
+            // 1. Heart (Parametric)
+            createHeart: () => {
+                const arr = [];
+                for(let i=0; i<CONFIG.particleCount; i++) {
+                    let t = Math.random() * Math.PI * 2;
+                    let x = 16 * Math.pow(Math.sin(t), 3);
+                    let y = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+                    let z = (Math.random() - 0.5) * 5; 
+                    
+                    const scale = 0.5 + Math.random() * 0.5;
+                    x *= scale; y *= scale; z *= scale;
+
+                    arr.push(x * 15, y * 15 + 200, z * 15); 
+                }
+                return arr;
+            },
+
+            // 2. Star (Geometric)
+            createStar: () => {
+                const arr = [];
+                for(let i=0; i<CONFIG.particleCount; i++) {
+                    const z = (Math.random() - 0.5) * 40;
+                    
+                    let sx, sy;
+                    const rad = 300;
+                    const spike = 5;
+                    
+                    let valid = false;
+                    while(!valid) {
+                         sx = (Math.random() - 0.5) * 2 * rad;
+                         sy = (Math.random() - 0.5) * 2 * rad;
+                         const ang = Math.atan2(sy, sx);
+                         const mag = Math.sqrt(sx*sx + sy*sy);
+                         
+                         const wave = Math.abs(Math.cos(ang * 2.5)); 
+                         const limit = rad * (0.3 + 0.7 * wave); 
+                         if (mag < limit) valid = true;
+                    }
+                    
+                    arr.push(sx, sy, z);
+                }
+                return arr;
+            },
+
+            // 3. Flower (Sakura)
+            createFlower: () => {
+                const arr = [];
+                for(let i=0; i<CONFIG.particleCount; i++) {
+                    const t = Math.random() * Math.PI * 2; 
+                    const k = 5; 
+                    const rMax = 300;
+                    const rShape = Math.abs(Math.cos(k * t * 0.5)); 
+                    const r = Math.random() * rMax * rShape;
+                    
+                    const x = r * Math.cos(t);
+                    const y = r * Math.sin(t);
+                    const z = (Math.random() - 0.5) * (100 - r * 0.2); 
+                    
+                    arr.push(x, y, z);
+                }
+                return arr;
+            },
+
+            // 4. Note / Text via Canvas
+            createFromCanvas: (text, size = 300) => {
+                const w = 500;
+                const h = 500;
+                textCanvas.width = w;
+                textCanvas.height = h;
+                textCtx.clearRect(0,0,w,h);
+                textCtx.fillStyle = 'white';
+                textCtx.font = `bold ${size}px Arial`;
+                textCtx.textAlign = 'center';
+                textCtx.textBaseline = 'middle';
+                textCtx.fillText(text, w/2, h/2);
+                
+                const imageData = textCtx.getImageData(0,0,w,h).data;
+                const activePixels = [];
+                for(let y=0; y<h; y+=4) { 
+                    for(let x=0; x<w; x+=4) {
+                        const idx = (y*w + x) * 4;
+                        if(imageData[idx] > 128) {
+                            activePixels.push({x: x - w/2, y: -(y - h/2)}); 
+                        }
+                    }
+                }
+                
+                const arr = [];
+                for(let i=0; i<CONFIG.particleCount; i++) {
+                    const p = activePixels[Math.floor(Math.random() * activePixels.length)];
+                    if(p) {
+                        arr.push(p.x * 1.5, p.y * 1.5, (Math.random()-0.5)*20);
+                    } else {
+                        arr.push(0,0,0);
+                    }
+                }
+                return arr;
+            },
+
+            // 5. Scatter (Sphere/Cloud)
+            createScatter: () => {
+                const arr = [];
+                for(let i=0; i<CONFIG.particleCount; i++) {
+                   const p = ShapeUtils.getSpherePoint(600 + Math.random() * 400);
+                   arr.push(p.x, p.y, p.z);
+                }
+                return arr;
+            }
+        };
+
+        // ==========================================
+        // MAIN 3D SCENE
+        // ==========================================
+        function initThree() {
+            const container = document.getElementById('canvas-container');
+            
+            // Scene & Camera
+            scene = new Scene();
+            scene.fog = new FogExp2(0x050505, 0.001);
+
+            camera = new PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 5000);
+            camera.position.z = 800;
+
+            renderer = new WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            // Create Geometry
+            geometry = new BufferGeometry();
+            
+            // Init arrays
+            const initialPos = ShapeUtils.createScatter();
+            for(let i=0; i<CONFIG.particleCount; i++) {
+                const i3 = i * 3;
+                positions[i3] = initialPos[i3];
+                positions[i3+1] = initialPos[i3+1];
+                positions[i3+2] = initialPos[i3+2];
+                
+                targets[i3] = initialPos[i3];
+                targets[i3+1] = initialPos[i3+1];
+                targets[i3+2] = initialPos[i3+2];
+                
+                velocities[i3] = (Math.random() - 0.5) * 2;
+                velocities[i3+1] = (Math.random() - 0.5) * 2;
+                velocities[i3+2] = (Math.random() - 0.5) * 2;
+                
+                const col = CONFIG.colors.scatter;
+                colors[i3] = col.r;
+                colors[i3+1] = col.g;
+                colors[i3+2] = col.b;
+                
+                sizes[i] = Math.random();
+            }
+
+            geometry.setAttribute('position', new BufferAttribute(positions, 3));
+            geometry.setAttribute('targetPosition', new BufferAttribute(targets, 3)); 
+            geometry.setAttribute('color', new BufferAttribute(colors, 3));
+            geometry.setAttribute('sizeRandom', new BufferAttribute(sizes, 1));
+
+            // Material
+            material = new ShaderMaterial({
+                uniforms: {
+                    uTime: { value: 0 },
+                    uPixelRatio: { value: renderer.getPixelRatio() },
+                    uSize: { value: CONFIG.particleSize }
+                },
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader,
+                transparent: true,
+                depthWrite: false,
+                blending: AdditiveBlending
+            });
+
+            points = new Points(geometry, material);
+            scene.add(points);
+
+            // Background Stars (Static)
+            addBackgroundStars();
+            
+            // Pre-calculate Shapes
+            console.log("Generating shapes...");
+            shapeCache.scatter = ShapeUtils.createScatter();
+            shapeCache.heart = ShapeUtils.createHeart();
+            shapeCache.star = ShapeUtils.createStar();
+            shapeCache.flower = ShapeUtils.createFlower();
+            shapeCache.note = ShapeUtils.createFromCanvas('♫', 350);
+            shapeCache.text = ShapeUtils.createFromCanvas('LOVE', 200);
+            console.log("Shapes ready.");
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function addBackgroundStars() {
+            const starGeo = new BufferGeometry();
+            const starCount = 2000;
+            const starPos = new Float32Array(starCount * 3);
+            for(let i=0; i<starCount*3; i++) {
+                starPos[i] = (Math.random() - 0.5) * 4000;
+            }
+            starGeo.setAttribute('position', new BufferAttribute(starPos, 3));
+            const starMat = new PointsMaterial({
+                color: 0x555555, size: 2, sizeAttenuation: false, transparent: true, opacity: 0.8
+            });
+            const stars = new Points(starGeo, starMat);
+            scene.add(stars);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            material.uniforms.uPixelRatio.value = renderer.getPixelRatio();
+        }
+
+        // ==========================================
+        // ANIMATION LOOP
+        // ==========================================
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const time = clock.getElapsedTime();
+            material.uniforms.uTime.value = time;
+
+            // Breathing / Pulse Animation for shapes
+            let pulseScale = 1.0;
+            if (currentShape !== 'scatter') {
+                pulseScale = 1.0 + Math.sin(time * 3) * 0.05; // Gentle heartbeat
+                points.rotation.y = Math.sin(time * 0.2) * 0.1; // Slow sway
+            } else {
+                points.rotation.y += 0.001; // Slow spin for scatter
+            }
+
+            // Physics Update
+            const positionsAttr = geometry.attributes.position;
+            const colorsAttr = geometry.attributes.color;
+            const posArr = positionsAttr.array;
+            const colArr = colorsAttr.array;
+            
+            const targetShapeArr = shapeCache[currentShape] || shapeCache.scatter;
+
+            // Color Transition
+            const targetC = CONFIG.colors[currentShape] || CONFIG.colors.scatter;
+            const lerpSpeed = 0.05;
+
+            for(let i=0; i<CONFIG.particleCount; i++) {
+                const i3 = i * 3;
+
+                // 1. Get Target
+                let tx = targetShapeArr[i3] * pulseScale;
+                let ty = targetShapeArr[i3+1] * pulseScale;
+                let tz = targetShapeArr[i3+2] * pulseScale;
+                
+                // If scatter, add dynamic noise
+                if(currentShape === 'scatter') {
+                    tx += Math.cos(time + i) * 50;
+                    ty += Math.sin(time + i * 0.5) * 50;
+                }
+
+                // 2. Physics: Velocity += Force
+                const dx = tx - posArr[i3];
+                const dy = ty - posArr[i3+1];
+                const dz = tz - posArr[i3+2];
+
+                // Acceleration (Attraction force)
+                velocities[i3]     += dx * 0.005;
+                velocities[i3+1]   += dy * 0.005;
+                velocities[i3+2]   += dz * 0.005;
+
+                // Friction (Damping)
+                velocities[i3]     *= 0.92;
+                velocities[i3+1]   *= 0.92;
+                velocities[i3+2]   *= 0.92;
+
+                // Update Position
+                posArr[i3]     += velocities[i3];
+                posArr[i3+1]   += velocities[i3+1];
+                posArr[i3+2]   += velocities[i3+2];
+
+                // 3. Color Update (Lerp)
+                colArr[i3] += (targetC.r - colArr[i3]) * lerpSpeed;
+                colArr[i3+1] += (targetC.g - colArr[i3+1]) * lerpSpeed;
+                colArr[i3+2] += (targetC.b - colArr[i3+2]) * lerpSpeed;
+                
+                // Velocity color flair (brighter when moving fast)
+                const speed = Math.abs(velocities[i3]) + Math.abs(velocities[i3+1]);
+                if (speed > 2.0 && currentShape === 'scatter') {
+                    colArr[i3] += 0.1; 
+                    colArr[i3+1] += 0.1;
+                    colArr[i3+2] += 0.1;
+                }
+            }
+
+            positionsAttr.needsUpdate = true;
+            colorsAttr.needsUpdate = true;
+
+            renderer.render(scene, camera);
+        }
+
+        // ==========================================
+        // MEDIAPIPE LOGIC
+        // ==========================================
+        async function setupMediaPipe() {
+            const videoElement = document.getElementById('input-video');
+            
+            // 使用全局 Hands 对象
+            handsInstance = new Hands({locateFile: (file) => {
+                // MediaPipe 资源路径
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`;
+            }});
+
+            handsInstance.setOptions({
+                maxNumHands: 1,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.6,
+                minTrackingConfidence: 0.5
+            });
+
+            handsInstance.onResults(onHandsResults);
+            startCamera(handsInstance, videoElement);
+        }
+
+        async function startCamera(handsInstance, videoElement) {
+            try {
+                // MediaPipe 要求视频流的分辨率，避免性能问题
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { width: {ideal: 640}, height: {ideal: 480} } });
+                videoElement.srcObject = stream;
+                videoElement.play();
+                
+                // 确保视频元数据加载完毕再开始发送帧
+                videoElement.onloadedmetadata = () => {
+                    // 移除加载器
+                    document.getElementById('loader').style.opacity = 0;
+                    setTimeout(() => document.getElementById('loader').style.display = 'none', 800);
+
+                    // Detection Loop
+                    const cameraLoop = async () => {
+                        // 尝试在 requestAnimationFrame 中调用 hands.send，提高性能
+                        await handsInstance.send({image: videoElement});
+                        requestAnimationFrame(cameraLoop);
+                    };
+                    requestAnimationFrame(cameraLoop);
+                };
+                
+            } catch (err) {
+                console.error("Camera access failed:", err);
+                alert("Camera permission denied or not available. Visualization will run in demo mode.");
+                document.getElementById('loader-text').innerText = "CAMERA ERROR - DEMO MODE";
+                setTimeout(() => {
+                     document.getElementById('loader').style.display = 'none';
+                }, 2000);
+            }
+        }
+
+        // GESTURE RECOGNITION
+        function onHandsResults(results) {
+            const statusEl = document.getElementById('status');
+            const nameEl = document.getElementById('gesture-name');
+            
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                isHandDetected = true;
+                statusEl.innerText = "TRACKING ACTIVE";
+                statusEl.style.color = "#00f3ff";
+
+                const lm = results.multiHandLandmarks[0];
+                detectGesture(lm, nameEl);
+            } else {
+                isHandDetected = false;
+                statusEl.innerText = "NO HAND DETECTED";
+                statusEl.style.color = "gray";
+            }
+        }
+
+        function detectGesture(landmarks, labelEl) {
+            // Helper function for distance
+            const dist = (a, b) => {
+                const dx = a.x - b.x;
+                const dy = a.y - b.y;
+                const dz = a.z - b.z;
+                return Math.sqrt(dx*dx + dy*dy + dz*dz);
+            };
+
+            // Heuristic for "Finger Up" based on tip being further from the wrist (0) than the knuckle (pip)
+            const isFingerUp = (tipIdx, pipIdx) => {
+                const distTip = dist(landmarks[0], landmarks[tipIdx]);
+                const distPip = dist(landmarks[0], landmarks[pipIdx]);
+                // 使用一个相对较大的 Z 轴阈值来确定手指是否伸直（Z轴坐标值较小，即远离屏幕）
+                return distTip > distPip + 0.08; 
+            };
+            
+            // Thumb is special: Check distance between tip (4) and palm base (17)
+            const isThumbUp = () => {
+                 const distTip = dist(landmarks[17], landmarks[4]);
+                 const distKnuckle = dist(landmarks[17], landmarks[2]);
+                 return distTip > distKnuckle + 0.02;
+            }
+
+
+            const thumb = isThumbUp();
+            const index = isFingerUp(8, 6);
+            const middle = isFingerUp(12, 10);
+            const ring = isFingerUp(16, 14);
+            const pinky = isFingerUp(20, 18);
+            
+            const count = (thumb?1:0) + (index?1:0) + (middle?1:0) + (ring?1:0) + (pinky?1:0);
+
+            let detected = '';
+
+            // LOGIC MAPPING
+            // 1. Fist (Closed) -> Heart
+            if (count === 0) {
+                detected = 'heart';
+                labelEl.innerText = "♥ PULSE ♥";
+            }
+            // 2. Open Palm (All 5) -> Explosion
+            else if (count === 5) {
+                detected = 'scatter';
+                labelEl.innerText = ">>> SCATTER <<<";
+            }
+            // 3. V Sign (Index + Middle) -> Star
+            else if (index && middle && !ring && !pinky && !thumb) {
+                detected = 'star';
+                labelEl.innerText = "★ STAR ★";
+            }
+            // 4. Rock/Horns (Index + Pinky + Thumb/Non-thumb) -> Note (简化为 Index + Pinky)
+            else if (index && pinky && !middle && !ring) {
+                detected = 'note';
+                labelEl.innerText = "♫ MUSIC ♫";
+            }
+            // 5. Four fingers up + Thumb in -> LOVE
+            else if (index && middle && ring && pinky && !thumb) {
+                detected = 'text';
+                labelEl.innerText = "L O V E";
+            }
+            else {
+                return;
+            }
+
+            if (detected && detected !== currentShape) {
+                triggerTransition(detected);
+            }
+        }
+
+        function triggerTransition(newShape) {
+            currentShape = newShape;
+            
+            // Add a little "Explosion" velocity impulse when switching
+            for(let i=0; i<CONFIG.particleCount; i++) {
+                const i3 = i * 3;
+                velocities[i3] += (Math.random()-0.5) * 4; // 增大冲击力
+                velocities[i3+1] += (Math.random()-0.5) * 4;
+                velocities[i3+2] += (Math.random()-0.5) * 4;
+            }
+        }
+
+        // ==========================================
+        // INITIALIZATION FLOW
+        // ==========================================
+        window.onload = () => {
+            initThree();
+            animate();
+
+            const startBtn = document.getElementById('start-btn');
+            const loaderText = document.getElementById('loader-text');
+
+            // Simulate "System Check"
+            setTimeout(() => {
+                loaderText.innerText = "SYSTEM READY. PERMISSION REQUIRED.";
+                startBtn.style.display = 'block';
+            }, 1000);
+
+            startBtn.addEventListener('click', () => {
+                startBtn.innerText = "ACCESSING...";
+                setupMediaPipe();
+            });
+
+            // Camera Toggle
+            const camToggle = document.getElementById('cam-toggle');
+            const videoPreview = document.getElementById('camera-container');
+            const videoElement = document.getElementById('input-video');
+            let camActive = false; // Track camera stream state
+            
+            // Initial setting
+            videoPreview.style.display = 'block';
+
+            camToggle.addEventListener('click', () => {
+                const stream = videoElement.srcObject;
+                if (!stream) return; // Ignore if camera hasn't started yet
+
+                camActive = !camActive;
+                
+                // Toggle video display (privacy)
+                videoPreview.style.display = camActive ? 'block' : 'none';
+                camToggle.innerText = camActive ? 'TOGGLE CAM' : 'SHOW CAM';
+
+                // Pause/play the actual video stream data sending (minor performance gain/privacy)
+                // Note: Stopping the tracks is better for true privacy/performance, but complex to restart
+                // Here, we just pause rendering and MediaPipe processing if handsInstance is available.
+                if (handsInstance) {
+                    // MediaPipe doesn't have a simple pause, relying on the loop structure
+                    // For simplicity, we only toggle the display now.
+                }
+
+                // If fully disabling:
+                /*
+                if (!camActive) {
+                    stream.getTracks().forEach(track => track.stop());
+                    videoElement.srcObject = null;
+                } else {
+                    // Need a full restart logic here which is complex for a single file solution
+                }
+                */
+            });
+        };
+        
+        })();
+    </script>
+</body>
 </html>
