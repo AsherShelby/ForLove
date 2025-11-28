@@ -150,11 +150,11 @@
         {
             "imports": {
 
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three": "./hand_asset/three.module.js",
 
-                "@mediapipe/hands": "https://unpkg.com/@mediapipe/hands@0.4.1675469240/hands.js",
+                "@mediapipe/hands": "./hand_asset/hands.js",
 
-                "@mediapipe/drawing_utils": "https://unpkg.com/@mediapipe/drawing_utils/drawing_utils.js"
+                "@mediapipe/drawing_utils": "./hand_asset/drawing_utils.js"
 
             }
         }
@@ -659,11 +659,11 @@
             
             // Load Hands library script
             const script = document.createElement('script');
-            script.src = "https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js";
+            script.src = "./hand_asset/hands.js";
             script.crossOrigin = "anonymous";
             script.onload = async () => {
                 const hands = new window.Hands({locateFile: (file) => {
-                    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                    return `./hand_asset/${file}`;
                 }});
 
                 hands.setOptions({
@@ -852,4 +852,5 @@
 </body>
 
 </html>
+
 
