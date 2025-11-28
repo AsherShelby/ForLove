@@ -146,19 +146,9 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
     
-    <script type="importmap">
-        {
-            "imports": {
-
-                "three": "./hand_asset/three.module.js",
-
-                "@mediapipe/hands": "./hand_asset/hands.js",
-
-                "@mediapipe/drawing_utils": "./hand_asset/drawing_utils.js"
-
-            }
-        }
-    </script>
+    <script src="./hand_asset/three.min.js"></script>
+    <script src="./hand_asset/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="./hand_asset/hands.js" crossorigin="anonymous"></script>
 </head>
 <body>
 
@@ -852,5 +842,6 @@
 </body>
 
 </html>
+
 
 
