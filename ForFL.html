@@ -146,7 +146,7 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
     
-    <script src="./hand_asset/three.min.js"></script>
+    <script src="./hand_asset/three.module.js"></script>
     <script src="./hand_asset/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="./hand_asset/hands.js" crossorigin="anonymous"></script>
 </head>
@@ -175,7 +175,7 @@
     <div id="canvas-container"></div>
 
     <script type="module">
-        import * as THREE from 'three';
+        import * as THREE from './hand_asset/three.module.js';
         // MediaPipe creates globals, we load the script dynamically to ensure order
     
         // ==========================================
@@ -842,6 +842,5 @@
 </body>
 
 </html>
-
 
 
